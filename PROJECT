@@ -7,4 +7,10 @@ layout:
 - go.kubebuilder.io/v4
 projectName: dynamic-device-scaler
 repo: github.com/InfraDDS/dynamic-device-scaler
+resources:
+- controller: true
+  domain: infra.dds
+  group: infra.dds
+  kind: ResourceMonitor
+  version: v1alpha1
 version: "3"
