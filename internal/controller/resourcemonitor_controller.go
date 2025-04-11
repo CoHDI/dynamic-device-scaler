@@ -20,7 +20,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	k8sapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,8 +53,7 @@ type ResourceMonitorReconciler struct {
 func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
 
-	// TODO(user): your logic here
-
+	//sourceapi.DeviceClass
 	return ctrl.Result{}, nil
 }
 
@@ -63,8 +62,8 @@ func (r *ResourceMonitorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	eventHandler := handler.EnqueueRequestForObject{}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Watches(&k8sapi.ResourceClaim{}, &eventHandler).
-		Watches(&k8sapi.ResourceSlice{}, &eventHandler).
+		Watches(&resourceapi.ResourceClaim{}, &eventHandler).
+		Watches(&resourceapi.ResourceSlice{}, &eventHandler).
 		Named("resourcemonitor").
 		Complete(r)
 }
