@@ -8,11 +8,11 @@ type ResourceClaimInfo struct {
 	CreationTimestamp v1.Time               `json:"creation_timestamp"`
 	Namespace         string                `json:"namespace"`
 	Devices           []ResourceClaimDevice `json:"devices"`
-	UsedByPod         bool                  `json:"used_by_pod"`
 }
 
 type ResourceClaimDevice struct {
-	Name  string `json:"name"`
-	Model string `json:"model"`
-	State string `json:"state"`
+	Name      string `json:"name"`
+	Model     string `json:"model"`
+	State     string `json:"state"`
+	UsedByPod bool   `json:"used_by_pod"`
 }
