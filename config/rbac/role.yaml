@@ -1,11 +1,63 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    app.kubernetes.io/name: dynamic-device-scaler
-    app.kubernetes.io/managed-by: kustomize
   name: manager-role
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - cro.hpsys.ibm.ie.com
+  resources:
+  - composabilityrequests
+  - composableresources
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cro.hpsys.ibm.ie.com
+  resources:
+  - composabilityrequests/status
+  - composableresources/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - resource.k8s.io
+  resources:
+  - resourceclaims
+  - resourceslices
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - resource.k8s.io
+  resources:
+  - resourceclaims/status
+  - resourceslices/status
+  verbs:
+  - get
+  - patch
+  - update

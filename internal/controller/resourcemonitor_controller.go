@@ -42,9 +42,21 @@ type ResourceMonitorReconciler struct {
 	Scheme    *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=infra.dds.infra.dds,resources=resourcemonitors,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=infra.dds.infra.dds,resources=resourcemonitors/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=infra.dds.infra.dds,resources=resourcemonitors/finalizers,verbs=update
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceslices,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceslices/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=cro.hpsys.ibm.ie.com,resources=composabilityrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cro.hpsys.ibm.ie.com,resources=composabilityrequests/status,verbs=get;update;patch
+
+// +kubebuilder:rbac:groups=cro.hpsys.ibm.ie.com,resources=composableresources,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cro.hpsys.ibm.ie.com,resources=composableresources/status,verbs=get;update;patch
+
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get
+
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;patch;update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
