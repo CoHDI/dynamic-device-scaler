@@ -21,7 +21,7 @@ func sortByTime(resourceClaims []types.ResourceClaimInfo) {
 	})
 }
 
-func ResendFailed(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo) error {
+func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo) error {
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return err
@@ -92,7 +92,7 @@ outerLoop:
 	return nil
 }
 
-func ResendSchedule(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo) error {
+func RescheduleNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo) error {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return fmt.Errorf("failed to list ComposableResourceList: %v", err)

@@ -165,12 +165,12 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 
 func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec *types.ComposableDRASpec) error {
 	for _, nodeInfo := range nodeInfos {
-		err := utils.ResendFailed(ctx, r.Client, nodeInfo, resourceClaimInfos)
+		err := utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, resourceClaimInfos)
 		if err != nil {
 			return err
 		}
 
-		err = utils.ResendSchedule(ctx, r.Client, nodeInfo, resourceClaimInfos)
+		err = utils.NotifySchedulerForReschedule(ctx, r.Client, nodeInfo, resourceClaimInfos)
 		if err != nil {
 			return err
 		}
