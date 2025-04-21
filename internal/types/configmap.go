@@ -1,7 +1,7 @@
 package types
 
 type ComposableDRASpec struct {
-	DeviceInfo    []DeviceInfo `yaml:"device-info"`
+	DeviceInfos   []DeviceInfo `yaml:"device-info"`
 	LabelPrefix   string       `yaml:"label-prefix"`
 	FabricIDRange []int        `yaml:"fabric-id-range"`
 }

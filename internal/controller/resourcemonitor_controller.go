@@ -88,25 +88,27 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 }
 
-func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.ResourceClaimInfo, []types.ResourceSliceInfo, []types.NodeInfo, *types.ComposableDRASpec, error) {
+func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.ResourceClaimInfo, []types.ResourceSliceInfo, []types.NodeInfo, types.ComposableDRASpec, error) {
+	var composableDRASpec types.ComposableDRASpec
+
 	resourceClaimInfos, err := utils.GetResourceClaimInfo(ctx, r.Client)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, composableDRASpec, err
 	}
 
 	resourceSliceInfos, err := utils.GetResourceSliceInfo(ctx, r.Client)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, composableDRASpec, err
 	}
 
-	composableDRASpec, err := utils.GetConfigMapInfo(ctx, r.ClientSet)
+	composableDRASpec, err = utils.GetConfigMapInfo(ctx, r.ClientSet)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, composableDRASpec, err
 	}
 
-	nodeInfos, err := utils.GetNodeInfo(ctx, r.ClientSet, composableDRASpec.LabelPrefix)
+	nodeInfos, err := utils.GetNodeInfo(ctx, r.ClientSet, composableDRASpec)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, composableDRASpec, err
 	}
 
 	return resourceClaimInfos, resourceSliceInfos, nodeInfos, composableDRASpec, nil
@@ -163,14 +165,14 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 	return nil
 }
 
-func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec *types.ComposableDRASpec) error {
+func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec types.ComposableDRASpec) error {
 	for _, nodeInfo := range nodeInfos {
 		err := utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, resourceClaimInfos)
 		if err != nil {
 			return err
 		}
 
-		err = utils.NotifySchedulerForReschedule(ctx, r.Client, nodeInfo, resourceClaimInfos)
+		err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, resourceClaimInfos)
 		if err != nil {
 			return err
 		}
@@ -189,7 +191,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 	return nil
 }
 
-func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec *types.ComposableDRASpec) error {
+func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec types.ComposableDRASpec) error {
 	deviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, resourceClaimInfos)
 	if err != nil {
 		return err
@@ -202,7 +204,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 
 	var requiredCount, actualCount int
 	var exit bool
-	for _, device := range composableDRASpec.DeviceInfo {
+	for _, device := range composableDRASpec.DeviceInfos {
 		requiredCount = deviceCount[device.CDIModelName]
 		exit = false
 		for _, cr := range composabilityRequestList.Items {
