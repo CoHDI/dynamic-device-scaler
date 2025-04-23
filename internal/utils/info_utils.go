@@ -24,32 +24,39 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 	}
 
 	for _, rc := range resourceClaimList.Items {
+		if len(rc.Status.ReservedFor) == 0 {
+			continue
+		}
+
 		var resourceClaimInfo types.ResourceClaimInfo
 		resourceClaimInfo.Name = rc.Name
+		//TODO: get node info to NodeName
 		resourceClaimInfo.Namespace = rc.Namespace
 		resourceClaimInfo.CreationTimestamp = rc.ObjectMeta.CreationTimestamp
 		for _, device := range rc.Status.Devices {
+			// waiting for PR https://github.com/kubernetes/kubernetes/pull/130160 to be merged
+			// Determine the state based on the added claim.status.Devices[].BindingConditions in https://github.com/kubernetes/kubernetes/pull/130160123
+			if len(device.BindingConditions) == 0 {
+				continue
+			}
 			var deviceInfo types.ResourceClaimDevice
 			deviceInfo.Name = device.Device
 
-			// waiting for PR https://github.com/kubernetes/kubernetes/pull/130160 to be merged
-			// Determine the state based on the added claim.status.Devices[].BindingConditions in https://github.com/kubernetes/kubernetes/pull/130160123
-			if device.BindingConditions != nil {
-				if device.Conditions != nil {
-					if device.Conditions[0].Type == "FabricDeviceReschedule" && device.Conditions[0].Status == "True" {
-						deviceInfo.State = "Reschedule"
-					} else if device.Conditions[0].Type == "FabricDeviceFailed" && device.Conditions[0].Status == "True" {
-						deviceInfo.State = "Failed"
-					} else {
-						deviceInfo.State = "Preparing"
-					}
+			if device.Conditions != nil {
+				if device.Conditions[0].Type == "FabricDeviceReschedule" && device.Conditions[0].Status == "True" {
+					deviceInfo.State = "Reschedule"
+				} else if device.Conditions[0].Type == "FabricDeviceFailed" && device.Conditions[0].Status == "True" {
+					deviceInfo.State = "Failed"
+				} else {
+					deviceInfo.State = "Preparing"
 				}
 			}
 
 			// TODO: more judgment required
-			if len(rc.Status.ReservedFor) > 0 {
+			if rc.Status.ReservedFor[0].Resource == "pods" {
 				deviceInfo.UsedByPod = true
 			}
+
 			resourceClaimInfo.Devices = append(resourceClaimInfo.Devices, deviceInfo)
 		}
 
@@ -75,15 +82,23 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfo.Driver = rs.Spec.Driver
 		resourceSliceInfo.NodeName = rs.Spec.NodeName
 
-		if rs.Spec.NodeSelector != nil {
-			for _, term := range rs.Spec.NodeSelector.NodeSelectorTerms {
-				for _, expr := range term.MatchExpressions {
-					switch expr.Key {
-					case "fabric":
-						if len(expr.Values) > 0 {
-							resourceSliceInfo.FabricID = expr.Values[0]
+		if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {
+			resourceSliceInfo.State = types.ResourceSliceStateGreen
+		} else {
+			resourceSliceInfo.State = types.ResourceSliceStateRed
+		}
+
+		if resourceSliceInfo.State == types.ResourceSliceStateGreen {
+			if rs.Spec.NodeSelector != nil {
+				for _, term := range rs.Spec.NodeSelector.NodeSelectorTerms {
+					for _, expr := range term.MatchExpressions {
+						switch expr.Key {
+						case "fabric":
+							if len(expr.Values) > 0 {
+								resourceSliceInfo.FabricID = expr.Values[0]
+							}
+							//TODO: get more information from the fabric
 						}
-						//TODO: get more information from the fabric
 					}
 				}
 			}
