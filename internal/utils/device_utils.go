@@ -81,7 +81,7 @@ func updateComposabilityRequestCR(ctx context.Context, kubeClient client.Client,
 
 func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64) error {
 	if count < cr.Spec.Resource.Size {
-		nextSize, err := getNextSize(ctx, kubeClient, cr.Spec.Resource.Model, count)
+		nextSize, err := getNextSize(ctx, kubeClient, count)
 		if err != nil {
 			return fmt.Errorf("failed to get next size: %v", err)
 		}
@@ -94,7 +94,7 @@ func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 	return nil
 }
 
-func getNextSize(ctx context.Context, kubeClient client.Client, model string, count int64) (int64, error) {
+func getNextSize(ctx context.Context, kubeClient client.Client, count int64) (int64, error) {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return 0, fmt.Errorf("failed to list ComposableResourceList: %v", err)
@@ -102,7 +102,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, model string, co
 
 	var resourceCount int64
 	for _, resource := range resourceList.Items {
-		if (resource.Status.State != "Online" || resource.Status.State != "Attaching") && resource.DeletionTimestamp != nil {
+		if (resource.Status.State == "Online" || resource.Status.State == "Attaching") && resource.DeletionTimestamp != nil {
 			over, err := isLastUsedOverMinute(resource)
 			if err != nil || !over {
 				continue

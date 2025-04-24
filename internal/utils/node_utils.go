@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	"slices"
+
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
@@ -336,10 +338,5 @@ func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet *k
 }
 
 func notIn[T comparable](target T, slice []T) bool {
-	for _, v := range slice {
-		if v == target {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(slice, target)
 }
