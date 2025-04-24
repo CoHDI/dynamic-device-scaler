@@ -30,15 +30,14 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 
 		var resourceClaimInfo types.ResourceClaimInfo
 		resourceClaimInfo.Name = rc.Name
-		//TODO: get node info to NodeName
 		resourceClaimInfo.Namespace = rc.Namespace
 		resourceClaimInfo.CreationTimestamp = rc.ObjectMeta.CreationTimestamp
 		for _, device := range rc.Status.Devices {
-			// waiting for PR https://github.com/kubernetes/kubernetes/pull/130160 to be merged
-			// Determine the state based on the added claim.status.Devices[].BindingConditions in https://github.com/kubernetes/kubernetes/pull/130160123
-			if len(device.BindingConditions) == 0 {
-				continue
-			}
+			//TODO: wait for KEP5007
+
+			// if len(device.BindingConditions) == 0 {
+			// 	continue
+			// }
 			var deviceInfo types.ResourceClaimDevice
 			deviceInfo.Name = device.Device
 
@@ -52,7 +51,6 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 				}
 			}
 
-			// TODO: more judgment required
 			if rc.Status.ReservedFor[0].Resource == "pods" {
 				deviceInfo.UsedByPod = true
 			}
@@ -82,11 +80,12 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfo.Driver = rs.Spec.Driver
 		resourceSliceInfo.NodeName = rs.Spec.NodeName
 
-		if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {
-			resourceSliceInfo.State = types.ResourceSliceStateGreen
-		} else {
-			resourceSliceInfo.State = types.ResourceSliceStateRed
-		}
+		//TODO: wait for KEP5007
+		// if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {
+		// 	resourceSliceInfo.State = types.ResourceSliceStateGreen
+		// } else {
+		// 	resourceSliceInfo.State = types.ResourceSliceStateRed
+		// }
 
 		if resourceSliceInfo.State == types.ResourceSliceStateGreen {
 			if rs.Spec.NodeSelector != nil {
@@ -97,7 +96,6 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 							if len(expr.Values) > 0 {
 								resourceSliceInfo.FabricID = expr.Values[0]
 							}
-							//TODO: get more information from the fabric
 						}
 					}
 				}
@@ -235,7 +233,6 @@ func getModelName(composableDRASpec types.ComposableDRASpec, deviceName string) 
 func GetConfigMapInfo(ctx context.Context, clientSet *kubernetes.Clientset) (types.ComposableDRASpec, error) {
 	var composableDRASpec types.ComposableDRASpec
 
-	//TODO: fix ns and name
 	configMap, err := clientSet.CoreV1().ConfigMaps("composable-dra").Get(ctx, "composable-dra-dds", metav1.GetOptions{})
 	if err != nil {
 		return composableDRASpec, fmt.Errorf("failed to get ConfigMap: %v", err)
@@ -250,8 +247,6 @@ func GetConfigMapInfo(ctx context.Context, clientSet *kubernetes.Clientset) (typ
 	if err := yaml.Unmarshal([]byte(configMap.Data["fabric-id-range"]), &composableDRASpec.FabricIDRange); err != nil {
 		return composableDRASpec, fmt.Errorf("fabric-id-range parsing failed: %v", err)
 	}
-
-	//TODO: add validation for spec
 
 	return composableDRASpec, nil
 }

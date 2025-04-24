@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	cdioperator "github.com/IBM/cdi-operator"
+	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,9 +44,13 @@ outerLoop:
 
 				for _, request := range composabilityRequestList.Items {
 					if rcDevice.Model == request.Spec.Resource.Model {
-						if request.Spec.Resource.Size > node.MaxDevice {
-							setDevicesFailed(ctx, kubeClient, &rc)
-							continue outerLoop
+						for _, modelConstraint := range node.Models {
+							if modelConstraint.Model == rcDevice.Model {
+								if request.Spec.Resource.Size > int64(modelConstraint.MaxDevice) {
+									setDevicesFailed(ctx, kubeClient, &rc)
+									continue outerLoop
+								}
+							}
 						}
 					} else if request.Spec.Resource.Size > 0 {
 						if !isDeviceCoexistence(rcDevice.Model, request.Spec.Resource.Model) {
@@ -78,11 +82,15 @@ outerLoop:
 	}
 
 	for _, info := range node.Models {
-		if deviceCount[info.Model] > info.MaxDevice {
-			for _, rc := range resourceClaims {
-				for _, device := range rc.Devices {
-					if device.Model == info.Model {
-						setDevicesFailed(ctx, kubeClient, &rc)
+		for _, modelConstraint := range node.Models {
+			if info.Model == modelConstraint.Model {
+				if deviceCount[info.Model] > modelConstraint.MaxDevice {
+					for _, rc := range resourceClaims {
+						for _, device := range rc.Devices {
+							if device.Model == info.Model {
+								setDevicesFailed(ctx, kubeClient, &rc)
+							}
+						}
 					}
 				}
 			}
@@ -135,7 +143,6 @@ outerLoop:
 		for _, resource := range resourceList.Items {
 			if resourceUsed[resource.Name] {
 				currentTime := time.Now().Format(time.RFC3339)
-				// TODO: get label-prefix from ConfigMap
 				resource.Annotations["composable.test/last-used-time"] = currentTime
 				if err := kubeClient.Update(ctx, &resource); err != nil {
 					return fmt.Errorf("failed to update ComposableResource: %w", err)
@@ -168,7 +175,6 @@ func isLastUsedOverMinute(resource cdioperator.ComposableResource) (bool, error)
 	return duration > time.Minute, nil
 }
 
-// TODO: fix name
 func isResourceSliceRed(ctx context.Context, kubeClient client.Client, claimDeviceName string) (bool, error) {
 	resourceSliceList := &resourceapi.ResourceSliceList{}
 	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
@@ -179,9 +185,9 @@ func isResourceSliceRed(ctx context.Context, kubeClient client.Client, claimDevi
 		for _, device := range rs.Spec.Devices {
 			if device.Name == claimDeviceName {
 				//TODO: wait for KEP5007
-				if len(device.Basic.BindingConditions) == 0 {
-					return true, nil
-				}
+				// if len(device.Basic.BindingConditions) == 0 {
+				// 	return true, nil
+				// }
 			}
 		}
 	}
@@ -191,7 +197,6 @@ func isResourceSliceRed(ctx context.Context, kubeClient client.Client, claimDevi
 
 // isDeviceCoexistence determines whether two devices can coexist based on the content in ConfigMap
 func isDeviceCoexistence(device1, device2 string) bool {
-	//TODO:
 	return true
 }
 
@@ -291,14 +296,14 @@ func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet *k
 	}
 
 	for _, device := range devices {
-		for _, deviceInfo := range composableDRASpec.DeviceInfo {
+		for _, deviceInfo := range composableDRASpec.DeviceInfos {
 			if device == deviceInfo.CDIModelName {
 				notCoexistID = append(notCoexistID, deviceInfo.CannotCoexistWith...)
 			}
 		}
 	}
 
-	for _, deviceInfo := range composableDRASpec.DeviceInfo {
+	for _, deviceInfo := range composableDRASpec.DeviceInfos {
 		if notIn(deviceInfo.Index, notCoexistID) {
 			label := composableDRASpec.LabelPrefix + "/" + deviceInfo.K8sDeviceName
 			addLabels = append(addLabels, label)

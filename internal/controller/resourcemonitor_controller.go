@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	cdioperator "github.com/IBM/cdi-operator"
+	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/utils"
 	"github.com/go-logr/logr"
@@ -60,13 +60,6 @@ type ResourceMonitorReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ResourceMonitor object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
 
@@ -202,21 +195,21 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 		return err
 	}
 
-	var requiredCount, actualCount int
+	var requiredCount, actualCount int64
 	var exit bool
 	for _, device := range composableDRASpec.DeviceInfos {
-		requiredCount = deviceCount[device.CDIModelName]
+		requiredCount = int64(deviceCount[device.CDIModelName])
 		exit = false
 		for _, cr := range composabilityRequestList.Items {
 			if cr.Spec.Resource.Model == device.CDIModelName {
 				actualCount = cr.Spec.Resource.Size
 				if requiredCount > actualCount {
-					err := utils.DynamicAttach(ctx, r.Client, cr, requiredCount, device.CDIModelName, nodeInfo.Name)
+					err := utils.DynamicAttach(ctx, r.Client, &cr, requiredCount, device.CDIModelName, nodeInfo.Name)
 					if err != nil {
 						return err
 					}
 				} else if requiredCount < actualCount {
-					err := utils.DynamicDetach(ctx, r.Client, cr, requiredCount)
+					err := utils.DynamicDetach(ctx, r.Client, &cr, requiredCount)
 					if err != nil {
 						return err
 					}
