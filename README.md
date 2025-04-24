@@ -25,7 +25,7 @@ The following components work together to achieve dynamic scaling:
 - **Composable Resource Operator**: Receives device attach/detach instructions via CRs and instructs the Composable Disaggregated Infrastructure manager accordingly.
 - **Composable Disaggregated Infrastructure manager**: Manages Composable Disaggregated Infrastructure. (Note: The source code for this component is not included in InfraDDS project.)
 - **Composable DRA Driver**: Publishes available node-free devices to Kubernetes.
-- **Dynamic Device Scaler**: Instructs the CDI Operator (via CRs) to scale devices based on requests of Pods.
+- **Dynamic Device Scaler**: Instructs the Composable Resource Operator (via CRs) to scale devices based on requests of Pods.
 
 ![How Dynamic Device Scaler Works](doc/dds1.png)
 
