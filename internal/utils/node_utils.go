@@ -23,7 +23,7 @@ func sortByTime(resourceClaims []types.ResourceClaimInfo) {
 	})
 }
 
-func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo) error {
+func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaims []types.ResourceClaimInfo, composableDRASpec types.ComposableDRASpec) error {
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return err
@@ -37,8 +37,8 @@ outerLoop:
 			if rcDevice.State == "Preparing" {
 				for j, otherDevice := range rc.Devices {
 					if i != j && rcDevice.Model != otherDevice.Model {
-						if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model) {
-							setDevicesFailed(ctx, kubeClient, &rc)
+						if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model, composableDRASpec) {
+							setDevicesState(ctx, kubeClient, &rc, "Failed", "FabricDeviceFailed")
 							continue outerLoop
 						}
 					}
@@ -49,14 +49,14 @@ outerLoop:
 						for _, modelConstraint := range node.Models {
 							if modelConstraint.Model == rcDevice.Model {
 								if request.Spec.Resource.Size > int64(modelConstraint.MaxDevice) {
-									setDevicesFailed(ctx, kubeClient, &rc)
+									setDevicesState(ctx, kubeClient, &rc, "Failed", "FabricDeviceFailed")
 									continue outerLoop
 								}
 							}
 						}
 					} else if request.Spec.Resource.Size > 0 {
-						if !isDeviceCoexistence(rcDevice.Model, request.Spec.Resource.Model) {
-							setDevicesFailed(ctx, kubeClient, &rc)
+						if !isDeviceCoexistence(rcDevice.Model, request.Spec.Resource.Model, composableDRASpec) {
+							setDevicesState(ctx, kubeClient, &rc, "Failed", "FabricDeviceFailed")
 							continue outerLoop
 						}
 					}
@@ -66,8 +66,8 @@ outerLoop:
 					if rc.Name != rc2.Name {
 						for _, rc2Device := range rc2.Devices {
 							if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
-								if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model) {
-									setDevicesFailed(ctx, kubeClient, &rc)
+								if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
+									setDevicesState(ctx, kubeClient, &rc, "Failed", "FabricDeviceFailed")
 									continue outerLoop
 								}
 							}
@@ -90,7 +90,7 @@ outerLoop:
 					for _, rc := range resourceClaims {
 						for _, device := range rc.Devices {
 							if device.Model == info.Model {
-								setDevicesFailed(ctx, kubeClient, &rc)
+								setDevicesState(ctx, kubeClient, &rc, "Failed", "FabricDeviceFailed")
 							}
 						}
 					}
@@ -110,7 +110,7 @@ func RescheduleNotification(ctx context.Context, kubeClient client.Client, node 
 
 	sortByTime(resourceClaims)
 
-	var resourceUsed map[string]bool
+	resourceUsed := make(map[string]bool)
 
 outerLoop:
 	for _, rc := range resourceClaims {
@@ -141,7 +141,7 @@ outerLoop:
 				}
 			}
 		}
-		setDevicesReschedule(ctx, kubeClient, &rc)
+		setDevicesState(ctx, kubeClient, &rc, "Reschedule", "FabricDeviceReschedule")
 		for _, resource := range resourceList.Items {
 			if resourceUsed[resource.Name] {
 				currentTime := time.Now().Format(time.RFC3339)
@@ -197,15 +197,24 @@ func isResourceSliceRed(ctx context.Context, kubeClient client.Client, claimDevi
 	return false, nil
 }
 
-// isDeviceCoexistence determines whether two devices can coexist based on the content in ConfigMap
-func isDeviceCoexistence(device1, device2 string) bool {
+func isDeviceCoexistence(model1, model2 string, composableDRASpec types.ComposableDRASpec) bool {
+	for i := range composableDRASpec.DeviceInfos {
+		if composableDRASpec.DeviceInfos[i].CDIModelName == model1 {
+			for _, j := range composableDRASpec.DeviceInfos[i].CannotCoexistWith {
+				if composableDRASpec.DeviceInfos[j].CDIModelName == model2 {
+					return false
+				}
+			}
+		}
+	}
+
 	return true
 }
 
-func setDevicesFailed(ctx context.Context, kubeClient client.Client, resourceClaim *types.ResourceClaimInfo) error {
+func setDevicesState(ctx context.Context, kubeClient client.Client, resourceClaim *types.ResourceClaimInfo, targetState string, conditionType string) error {
 	for _, device := range resourceClaim.Devices {
 		if device.State == "Preparing" {
-			device.State = "Failed"
+			device.State = targetState
 		}
 	}
 
@@ -213,48 +222,48 @@ func setDevicesFailed(ctx context.Context, kubeClient client.Client, resourceCla
 		Name:      resourceClaim.Name,
 		Namespace: resourceClaim.Namespace,
 	}
+
 	var rc resourceapi.ResourceClaim
 
 	if err := kubeClient.Get(ctx, namespacedName, &rc); err != nil {
 		return fmt.Errorf("failed to get ResourceClaim: %v", err)
 	}
 
-	newCondition := metav1.Condition{
-		Type:   "FabricDeviceFailed",
-		Status: metav1.ConditionTrue,
-	}
+	modified := false
 
-	for _, device := range rc.Status.Devices {
-		device.Conditions = append(device.Conditions, newCondition)
-	}
+	for i := range rc.Status.Devices {
+		device := &rc.Status.Devices[i]
 
-	return nil
-}
+		newCondition := metav1.Condition{
+			Type:               conditionType,
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now()),
+		}
 
-func setDevicesReschedule(ctx context.Context, kubeClient client.Client, resourceClaim *types.ResourceClaimInfo) error {
-	for _, device := range resourceClaim.Devices {
-		if device.State == "Preparing" {
-			device.State = "Reschedule"
+		conditionExists := false
+		for j, existingCond := range device.Conditions {
+			if existingCond.Type == conditionType {
+				if existingCond.Status != newCondition.Status {
+					device.Conditions[j] = newCondition
+					modified = true
+				}
+				conditionExists = true
+				break
+			}
+		}
+
+		if !conditionExists {
+			device.Conditions = append(device.Conditions, newCondition)
+			modified = true
 		}
 	}
 
-	namespacedName := k8stypes.NamespacedName{
-		Name:      resourceClaim.Name,
-		Namespace: resourceClaim.Namespace,
-	}
-	var rc resourceapi.ResourceClaim
-
-	if err := kubeClient.Get(ctx, namespacedName, &rc); err != nil {
-		return fmt.Errorf("failed to get ResourceClaim: %v", err)
+	if !modified {
+		return nil
 	}
 
-	newCondition := metav1.Condition{
-		Type:   "FabricDeviceReschedule",
-		Status: metav1.ConditionTrue,
-	}
-
-	for _, device := range rc.Status.Devices {
-		device.Conditions = append(device.Conditions, newCondition)
+	if err := kubeClient.Status().Update(ctx, &rc); err != nil {
+		return fmt.Errorf("failed to update ResourceClaim: %v", err)
 	}
 
 	return nil

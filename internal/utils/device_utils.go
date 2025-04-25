@@ -12,19 +12,22 @@ import (
 )
 
 func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, resourceClaims []types.ResourceClaimInfo) (map[string]int, error) {
-	var deviceCount map[string]int
+	deviceCount := make(map[string]int)
 
 	for _, rc := range resourceClaims {
+		isRed, err := isResourceSliceRed(ctx, kubeClient, rc.Name)
+		if err != nil {
+			return deviceCount, err
+		}
 		for _, device := range rc.Devices {
-			if device.State == "Preparing" {
+			if device.State != "Preparing" {
+				continue
+			}
+
+			deviceCount[device.Model]++
+
+			if isRed && device.UsedByPod {
 				deviceCount[device.Model]++
-				isRed, err := isResourceSliceRed(ctx, kubeClient, rc.Name)
-				if err != nil {
-					return deviceCount, err
-				}
-				if isRed && device.UsedByPod {
-					deviceCount[device.Model]++
-				}
 			}
 		}
 	}

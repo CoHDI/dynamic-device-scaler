@@ -1,15 +1,13 @@
 package utils
 
 import (
-	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
-	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestSortByTime(t *testing.T) {
@@ -99,190 +97,161 @@ func TestNotIn(t *testing.T) {
 	}
 }
 
-func TestSetDevicesReschedule(t *testing.T) {
-
-	testCases := []struct {
-		name           string
-		setupClient    func() client.Client
-		inputClaim     *types.ResourceClaimInfo
-		wantErr        bool
-		wantStates     map[string]string
-		wantConditions map[string][]metav1.Condition
+func TestIsDeviceCoexistence(t *testing.T) {
+	tests := []struct {
+		name                string
+		model1              string
+		model2              string
+		composableDRASpec   types.ComposableDRASpec
+		expectedCoexistence bool
 	}{
 		{
-			name: "successful reschedule with preparing devices",
-			setupClient: func() client.Client {
-				return fake.NewClientBuilder().
-					WithObjects(&resourceapi.ResourceClaim{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-claim",
-							Namespace: "default",
-						},
-						Status: resourceapi.ResourceClaimStatus{
-							Devices: []resourceapi.DeviceStatus{
-								{ID: "device-1", Conditions: []metav1.Condition{}},
-								{ID: "device-2", Conditions: []metav1.Condition{}},
-							},
-						},
-					}).
-					Build()
-			},
-			inputClaim: &types.ResourceClaimInfo{
-				Name:      "test-claim",
-				Namespace: "default",
-				Devices: []types.ResourceClaimDevice{
-					{Name: "device-1", State: "Preparing"},
-					{Name: "device-2", State: "Active"},
+			name:   "Models can coexist",
+			model1: "ModelA",
+			model2: "ModelB",
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:             0,
+						CDIModelName:      "ModelA",
+						CannotCoexistWith: []int{},
+					},
+					{
+						Index:             1,
+						CDIModelName:      "ModelB",
+						CannotCoexistWith: []int{},
+					},
 				},
 			},
-			wantErr: false,
-			wantStates: map[string]string{
-				"device-1": "Reschedule",
-				"device-2": "Active",
-			},
-			wantConditions: map[string][]metav1.Condition{
-				"device-1": {
-					{Type: "FabricDeviceReschedule", Status: metav1.ConditionTrue},
-				},
-				"device-2": {
-					{Type: "FabricDeviceReschedule", Status: metav1.ConditionTrue},
-				},
-			},
+			expectedCoexistence: true,
 		},
 		{
-			name: "no devices to reschedule",
-			setupClient: func() client.Client {
-				return fake.NewClientBuilder().
-					WithObjects(&resourceapi.ResourceClaim{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-claim",
-							Namespace: "default",
-						},
-						Status: resourceapi.ResourceClaimStatus{
-							Devices: []resourceapi.AllocatedDeviceStatus{
-								{Device: "device-1", Conditions: []metav1.Condition{}},
-							},
-						},
-					}).
-					Build()
-			},
-			inputClaim: &types.ResourceClaimInfo{
-				Name:      "test-claim",
-				Namespace: "default",
-				Devices: []types.ResourceClaimDevice{
-					{Name: "device-1", State: "Active"},
+			name:   "Models cannot coexist",
+			model1: "ModelA",
+			model2: "ModelB",
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:             0,
+						CDIModelName:      "ModelA",
+						CannotCoexistWith: []int{1},
+					},
+					{
+						Index:             1,
+						CDIModelName:      "ModelB",
+						CannotCoexistWith: []int{},
+					},
 				},
 			},
-			wantErr: false,
-			wantStates: map[string]string{
-				"device-1": "Active",
-			},
-			wantConditions: map[string][]metav1.Condition{
-				"device-1": {
-					{Type: "FabricDeviceReschedule", Status: metav1.ConditionTrue},
-				},
-			},
+			expectedCoexistence: false,
 		},
 		{
-			name: "resource claim not found",
-			setupClient: func() client.Client {
-				return fake.NewClientBuilder().Build()
-			},
-			inputClaim: &types.ResourceClaimInfo{
-				Name:      "non-existent",
-				Namespace: "default",
-				Devices: []types.ResourceClaimDevice{
-					{Name: "device-1", State: "Preparing"},
+			name:   "Model not found",
+			model1: "ModelX",
+			model2: "ModelY",
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:             0,
+						CDIModelName:      "ModelA",
+						CannotCoexistWith: []int{},
+					},
+					{
+						Index:             1,
+						CDIModelName:      "ModelB",
+						CannotCoexistWith: []int{},
+					},
 				},
 			},
-			wantErr: true,
-		},
-		{
-			name: "existing conditions preserved",
-			setupClient: func() client.Client {
-				return fake.NewClientBuilder().
-					WithObjects(&resourceapi.ResourceClaim{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-claim",
-							Namespace: "default",
-						},
-						Status: resourceapi.ResourceClaimStatus{
-							Devices: []resourceapi.AllocatedDeviceStatus{
-								{Device: "device-1", Conditions: []metav1.Condition{
-									{Type: "ExistingCondition", Status: metav1.ConditionTrue},
-								}},
-							},
-						},
-					}).
-					Build()
-			},
-			inputClaim: &types.ResourceClaimInfo{
-				Name:      "test-claim",
-				Namespace: "default",
-				Devices: []types.ResourceClaimDevice{
-					{Name: "device-1", State: "Preparing"},
-				},
-			},
-			wantErr: false,
-			wantConditions: map[string][]metav1.Condition{
-				"device-1": {
-					{Type: "ExistingCondition", Status: metav1.ConditionTrue},
-					{Type: "FabricDeviceReschedule", Status: metav1.ConditionTrue},
-				},
-			},
+			expectedCoexistence: true,
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			kubeClient := tc.setupClient()
-
-			err := setDevicesReschedule(context.Background(), kubeClient, tc.inputClaim)
-
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("setDevicesReschedule() error = %v, wantErr %v", err, tc.wantErr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isDeviceCoexistence(tt.model1, tt.model2, tt.composableDRASpec)
+			if result != tt.expectedCoexistence {
+				t.Errorf("expected %v, got %v", tt.expectedCoexistence, result)
 			}
-			if tc.wantErr {
-				return
+		})
+	}
+}
+
+func TestIsLastUsedOverMinute(t *testing.T) {
+	tests := []struct {
+		name           string
+		annotations    map[string]string
+		expectedResult bool
+		expectedErr    bool
+		errMsg         string
+	}{
+		{
+			name:           "No annotations",
+			annotations:    nil,
+			expectedResult: false,
+			expectedErr:    true,
+			errMsg:         "annotations not found",
+		},
+		{
+			name:           "Annotation not found",
+			annotations:    map[string]string{},
+			expectedResult: false,
+			expectedErr:    true,
+			errMsg:         "annotation composable.test/last-used-time not found",
+		},
+		{
+			name: "Invalid time format",
+			annotations: map[string]string{
+				"composable.test/last-used-time": "invalid-time-format",
+			},
+			expectedResult: false,
+			expectedErr:    true,
+			errMsg:         fmt.Errorf("failed to parse time: %v", fmt.Errorf("parsing time \"invalid-time-format\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"invalid-time-format\" as \"2006\"")).Error(),
+		},
+		{
+			name: "Time less than a minute ago",
+			annotations: map[string]string{
+				"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
+			},
+			expectedResult: false,
+			expectedErr:    false,
+		},
+		{
+			name: "Time more than a minute ago",
+			annotations: map[string]string{
+				"composable.test/last-used-time": time.Now().Add(-2 * time.Minute).Format(time.RFC3339),
+			},
+			expectedResult: true,
+			expectedErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resource := cdioperator.ComposableResource{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tt.annotations,
+				},
+				Spec: cdioperator.ComposableResourceSpec{
+					Type:       "gpu",
+					Model:      "A100",
+					TargetNode: "node1",
+				},
 			}
 
-			for _, device := range tc.inputClaim.Devices {
-				wantState, ok := tc.wantStates[device.Name]
-				if !ok {
-					continue
-				}
-				if device.State != wantState {
-					t.Errorf("device %s state = %s, want %s", device.Name, device.State, wantState)
-				}
-			}
+			result, err := isLastUsedOverMinute(resource)
 
-			var rc resourceapi.ResourceClaim
-			if err := kubeClient.Get(
-				context.Background(),
-				client.ObjectKey{Name: tc.inputClaim.Name, Namespace: tc.inputClaim.Namespace},
-				&rc,
-			); err != nil {
-				t.Fatalf("failed to get updated ResourceClaim: %v", err)
-			}
-
-			for _, deviceStatus := range rc.Status.Devices {
-				wantConditions, ok := tc.wantConditions[deviceStatus.ID]
-				if !ok {
-					continue
+			if tt.expectedErr {
+				if err == nil {
+					t.Errorf("Expected error, got none")
+				} else if err.Error() != tt.errMsg {
+					t.Errorf("Expected error message %q, got %q", tt.errMsg, err.Error())
 				}
-
-				if len(deviceStatus.Conditions) != len(wantConditions) {
-					t.Errorf("device %s conditions count = %d, want %d",
-						deviceStatus.ID, len(deviceStatus.Conditions), len(wantConditions))
-					continue
-				}
-
-				for i, cond := range deviceStatus.Conditions {
-					if cond.Type != wantConditions[i].Type || cond.Status != wantConditions[i].Status {
-						t.Errorf("device %s condition[%d] = %s/%s, want %s/%s",
-							deviceStatus.ID, i, cond.Type, cond.Status,
-							wantConditions[i].Type, wantConditions[i].Status)
-					}
+			} else if !tt.expectedErr {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				} else if result != tt.expectedResult {
+					t.Errorf("Expected result: %v, got %v", tt.expectedResult, result)
 				}
 			}
 		})
