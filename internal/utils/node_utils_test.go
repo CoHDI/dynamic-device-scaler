@@ -1,13 +1,20 @@
 package utils
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestSortByTime(t *testing.T) {
@@ -252,6 +259,275 @@ func TestIsLastUsedOverMinute(t *testing.T) {
 					t.Errorf("Unexpected error: %v", err)
 				} else if result != tt.expectedResult {
 					t.Errorf("Expected result: %v, got %v", tt.expectedResult, result)
+				}
+			}
+		})
+	}
+}
+
+func TestSetDevicesState(t *testing.T) {
+	testCases := []struct {
+		name              string
+		resourceClaimInfo types.ResourceClaimInfo
+		targetState       string
+		conditionType     string
+		existingRC        *resourceapi.ResourceClaim
+		expectedRC        *resourceapi.ResourceClaim
+		expectedRCInfo    types.ResourceClaimInfo
+		wantErr           bool
+	}{
+		{
+			name: "ResourceClaim with empty condition",
+			resourceClaimInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Preparing",
+					},
+				},
+			},
+			targetState:   "Reschedule",
+			conditionType: "FabricDeviceReschedule",
+			existingRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device:     "device-1",
+							Conditions: []metav1.Condition{},
+						},
+					},
+				},
+			},
+			expectedRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device: "device-1",
+							Conditions: []metav1.Condition{
+								{
+									Type:   "FabricDeviceReschedule",
+									Status: metav1.ConditionTrue,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRCInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Reschedule",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ResourceClaim with non-empty condition",
+			resourceClaimInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Preparing",
+					},
+				},
+			},
+			targetState:   "Reschedule",
+			conditionType: "FabricDeviceReschedule",
+			existingRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device: "device-1",
+							Conditions: []metav1.Condition{
+								{
+									Type:   "FabricDeviceReschedule",
+									Status: metav1.ConditionFalse,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device: "device-1",
+							Conditions: []metav1.Condition{
+								{
+									Type:   "FabricDeviceReschedule",
+									Status: metav1.ConditionTrue,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRCInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Reschedule",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ResourceClaim with matched condition",
+			resourceClaimInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Preparing",
+					},
+				},
+			},
+			targetState:   "Reschedule",
+			conditionType: "FabricDeviceReschedule",
+			existingRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device: "device-1",
+							Conditions: []metav1.Condition{
+								{
+									Type:   "FabricDeviceReschedule",
+									Status: metav1.ConditionTrue,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRC: &resourceapi.ResourceClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-claim",
+					Namespace: "test-ns",
+				},
+				Status: resourceapi.ResourceClaimStatus{
+					Devices: []resourceapi.AllocatedDeviceStatus{
+						{
+							Device: "device-1",
+							Conditions: []metav1.Condition{
+								{
+									Type:   "FabricDeviceReschedule",
+									Status: metav1.ConditionTrue,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRCInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Reschedule",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "ResourceClaim not found",
+			resourceClaimInfo: types.ResourceClaimInfo{
+				Name:      "test-claim",
+				Namespace: "test-ns",
+				Devices: []types.ResourceClaimDevice{
+					{
+						Name:  "device-1",
+						State: "Preparing",
+					},
+				},
+			},
+			targetState:   "Ready",
+			conditionType: "Ready",
+			existingRC:    nil,
+			expectedRC:    nil,
+			wantErr:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			objs := []runtime.Object{}
+			if tc.existingRC != nil {
+				objs = append(objs, tc.existingRC)
+			}
+
+			s := scheme.Scheme
+			s.AddKnownTypes(resourceapi.SchemeGroupVersion, &resourceapi.ResourceClaim{})
+
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(objs...).WithStatusSubresource(&resourceapi.ResourceClaim{}).Build()
+
+			result, err := setDevicesState(ctx, fakeClient, tc.resourceClaimInfo, tc.targetState, tc.conditionType)
+
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("setDevicesState() error = %v, wantErr %v", err, tc.wantErr)
+			}
+
+			if !tc.wantErr {
+				updatedRC := &resourceapi.ResourceClaim{}
+				namespacedName := k8stypes.NamespacedName{
+					Name:      tc.resourceClaimInfo.Name,
+					Namespace: tc.resourceClaimInfo.Namespace,
+				}
+				err := fakeClient.Get(ctx, namespacedName, updatedRC)
+				if err != nil {
+					t.Fatalf("failed to get updated ResourceClaim: %v", err)
+				}
+
+				for i := range updatedRC.Status.Devices {
+					for j := range updatedRC.Status.Devices[i].Conditions {
+						updatedRC.Status.Devices[i].Conditions[j].LastTransitionTime = metav1.Time{}
+						if tc.expectedRC != nil && tc.expectedRC.Status.Devices != nil && len(tc.expectedRC.Status.Devices) > 0 {
+							tc.expectedRC.Status.Devices[i].Conditions[j].LastTransitionTime = metav1.Time{}
+						}
+					}
+				}
+
+				if !reflect.DeepEqual(updatedRC.Status.Devices, tc.expectedRC.Status.Devices) {
+					t.Errorf("ResourceClaim was not updated as expected.\nGot:  %#v\nWant: %#v", updatedRC.Status.Devices, tc.expectedRC.Status.Devices)
+				}
+				if !reflect.DeepEqual(result, tc.expectedRCInfo) {
+					t.Errorf("ResourceClaimInfo was not updated as expected.\nGot:  %#v\nWant: %#v", result, tc.expectedRCInfo)
 				}
 			}
 		})

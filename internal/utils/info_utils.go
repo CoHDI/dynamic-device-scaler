@@ -114,12 +114,14 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 				resourceSliceInfo.Devices = append(resourceSliceInfo.Devices, deviceInfo)
 			}
 		}
+
+		resourceSliceInfoList = append(resourceSliceInfoList, resourceSliceInfo)
 	}
 
 	return resourceSliceInfoList, nil
 }
 
-func GetNodeInfo(ctx context.Context, clientSet *kubernetes.Clientset, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
+func GetNodeInfo(ctx context.Context, clientSet kubernetes.Interface, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
 	nodes, err := clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Nodes: %v", err)
@@ -162,10 +164,10 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				exit = false
-				for _, modelConstraint := range nodeInfo.Models {
-					if modelConstraint.DeviceName == deviceName {
-						modelConstraint.MaxDevice = max
-						modelConstraint.Model = model
+				for i := range nodeInfo.Models {
+					if nodeInfo.Models[i].DeviceName == deviceName {
+						nodeInfo.Models[i].MaxDevice = max
+						nodeInfo.Models[i].Model = model
 						exit = true
 						break
 					}
@@ -193,10 +195,10 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				exit = false
-				for _, modelConstraint := range nodeInfo.Models {
-					if modelConstraint.DeviceName == deviceName {
-						modelConstraint.MinDevice = min
-						modelConstraint.Model = model
+				for i := range nodeInfo.Models {
+					if nodeInfo.Models[i].DeviceName == deviceName {
+						nodeInfo.Models[i].MinDevice = min
+						nodeInfo.Models[i].Model = model
 						exit = true
 						break
 					}
@@ -230,7 +232,7 @@ func getModelName(composableDRASpec types.ComposableDRASpec, deviceName string) 
 	return "", fmt.Errorf("unknown device name: %s", deviceName)
 }
 
-func GetConfigMapInfo(ctx context.Context, clientSet *kubernetes.Clientset) (types.ComposableDRASpec, error) {
+func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (types.ComposableDRASpec, error) {
 	var composableDRASpec types.ComposableDRASpec
 
 	configMap, err := clientSet.CoreV1().ConfigMaps("composable-dra").Get(ctx, "composable-dra-dds", metav1.GetOptions{})
