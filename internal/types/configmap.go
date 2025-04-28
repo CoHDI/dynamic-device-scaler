@@ -1,21 +1,21 @@
 package types
 
 type ComposableDRASpec struct {
-	DeviceInfos   []DeviceInfo `yaml:"device-info"`
-	LabelPrefix   string       `yaml:"label-prefix"`
-	FabricIDRange []int        `yaml:"fabric-id-range"`
+	DeviceInfos   []DeviceInfo `json:"device-info"`
+	LabelPrefix   string       `json:"label-prefix"`
+	FabricIDRange []int        `json:"fabric-id-range"`
 }
 
 type DeviceInfo struct {
-	Index             int           `yaml:"index"`
-	CDIModelName      string        `yaml:"cdi-model-name"`
-	DRAttributes      []DRAttribute `yaml:"dra-attributes"`
-	LabelKeyModel     string        `yaml:"label-key-model"`
-	DriverName        string        `yaml:"driver-name"`
-	K8sDeviceName     string        `yaml:"k8s-device-name"`
-	CannotCoexistWith []int         `yaml:"cannot-coexist-with"`
+	Index             int           `json:"index"`
+	CDIModelName      string        `json:"cdi-model-name"`
+	DRAttributes      []DRAttribute `json:"dra-attributes"`
+	LabelKeyModel     string        `json:"label-key-model"`
+	DriverName        string        `json:"driver-name"`
+	K8sDeviceName     string        `json:"k8s-device-name"`
+	CannotCoexistWith []int         `json:"cannot-coexist-with"`
 }
 
 type DRAttribute struct {
-	ProductName string `yaml:"productName"`
+	ProductName string `json:"productName"`
 }

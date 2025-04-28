@@ -223,7 +223,7 @@ func isDeviceCoexistence(model1, model2 string, composableDRASpec types.Composab
 	for i := range composableDRASpec.DeviceInfos {
 		if composableDRASpec.DeviceInfos[i].CDIModelName == model1 {
 			for _, j := range composableDRASpec.DeviceInfos[i].CannotCoexistWith {
-				if composableDRASpec.DeviceInfos[j].CDIModelName == model2 {
+				if composableDRASpec.DeviceInfos[j-1].CDIModelName == model2 {
 					return false
 				}
 			}
@@ -300,9 +300,11 @@ func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet ku
 	}
 
 	for _, cr := range composabilityRequestList.Items {
-		if cr.Spec.Resource.Size > 0 {
-			if notIn(cr.Spec.Resource.Model, devices) {
-				devices = append(devices, cr.Spec.Resource.Model)
+		if cr.Spec.Resource.TargetNode == nodeInfo.Name {
+			if cr.Spec.Resource.Size > 0 {
+				if notIn(cr.Spec.Resource.Model, devices) {
+					devices = append(devices, cr.Spec.Resource.Model)
+				}
 			}
 		}
 	}
@@ -313,9 +315,11 @@ func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet ku
 	}
 
 	for _, rs := range resourceList.Items {
-		if rs.Status.State == "Online" {
-			if notIn(rs.Spec.Model, devices) {
-				devices = append(devices, rs.Spec.Model)
+		if rs.Spec.TargetNode == nodeInfo.Name {
+			if rs.Status.State == "Online" {
+				if notIn(rs.Spec.Model, devices) {
+					devices = append(devices, rs.Spec.Model)
+				}
 			}
 		}
 	}

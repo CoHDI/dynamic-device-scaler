@@ -247,7 +247,7 @@ func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (type
 	composableDRASpec.LabelPrefix = configMap.Data["label-prefix"]
 
 	if err := yaml.Unmarshal([]byte(configMap.Data["fabric-id-range"]), &composableDRASpec.FabricIDRange); err != nil {
-		return composableDRASpec, fmt.Errorf("fabric-id-range parsing failed: %v", err)
+		return composableDRASpec, fmt.Errorf("failed to parse fabric-id-range: %v", err)
 	}
 
 	return composableDRASpec, nil

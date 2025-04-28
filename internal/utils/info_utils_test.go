@@ -76,6 +76,26 @@ func TestGetConfigMapInfo(t *testing.T) {
 			wantErr:         true,
 			errMsg:          "failed to parse device-info",
 		},
+		{
+			name: "Invalid fabric-id-range",
+			configMapData: map[string]string{
+				"device-info": `
+- index: 1
+  cdi-model-name: "A100 40G"
+  dra-attributes:
+    - productName: "NVIDIA A100 40GB PCIe"
+  label-key-model: "composable-a100-40G"
+  driver-name: "gpu.nvidia.com"
+  k8s-device-name: "nvidia-a100-40"
+  cannot-coexist-with: [2, 3, 4]
+            `,
+				"label-prefix":    "test-",
+				"fabric-id-range": "invalid info",
+			},
+			createConfigMap: true,
+			wantErr:         true,
+			errMsg:          "failed to parse fabric-id-range",
+		},
 	}
 
 	for _, tt := range tests {
