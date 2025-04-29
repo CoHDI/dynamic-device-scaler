@@ -39,7 +39,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 			// 	continue
 			// }
 			var deviceInfo types.ResourceClaimDevice
-			deviceInfo.Name = device.Device
+			deviceInfo.Name = device.Driver
 
 			if device.Conditions != nil {
 				if device.Conditions[0].Type == "FabricDeviceReschedule" && device.Conditions[0].Status == "True" {
@@ -108,7 +108,7 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 				deviceInfo.Name = device.Name
 				for attrName, attrValue := range device.Basic.Attributes {
 					if attrName == "uuid" {
-						deviceInfo.UUID = attrValue.String()
+						deviceInfo.UUID = *attrValue.StringValue
 					}
 				}
 				resourceSliceInfo.Devices = append(resourceSliceInfo.Devices, deviceInfo)

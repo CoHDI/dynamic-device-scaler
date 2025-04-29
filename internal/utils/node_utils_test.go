@@ -121,12 +121,12 @@ func TestIsDeviceCoexistence(t *testing.T) {
 			composableDRASpec: types.ComposableDRASpec{
 				DeviceInfos: []types.DeviceInfo{
 					{
-						Index:             0,
+						Index:             1,
 						CDIModelName:      "ModelA",
 						CannotCoexistWith: []int{},
 					},
 					{
-						Index:             1,
+						Index:             2,
 						CDIModelName:      "ModelB",
 						CannotCoexistWith: []int{},
 					},
@@ -141,14 +141,14 @@ func TestIsDeviceCoexistence(t *testing.T) {
 			composableDRASpec: types.ComposableDRASpec{
 				DeviceInfos: []types.DeviceInfo{
 					{
-						Index:             0,
+						Index:             1,
 						CDIModelName:      "ModelA",
-						CannotCoexistWith: []int{1},
+						CannotCoexistWith: []int{2},
 					},
 					{
-						Index:             1,
+						Index:             2,
 						CDIModelName:      "ModelB",
-						CannotCoexistWith: []int{},
+						CannotCoexistWith: []int{1},
 					},
 				},
 			},
@@ -161,12 +161,12 @@ func TestIsDeviceCoexistence(t *testing.T) {
 			composableDRASpec: types.ComposableDRASpec{
 				DeviceInfos: []types.DeviceInfo{
 					{
-						Index:             0,
+						Index:             1,
 						CDIModelName:      "ModelA",
 						CannotCoexistWith: []int{},
 					},
 					{
-						Index:             1,
+						Index:             2,
 						CDIModelName:      "ModelB",
 						CannotCoexistWith: []int{},
 					},

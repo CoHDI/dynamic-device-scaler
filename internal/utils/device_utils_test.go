@@ -218,31 +218,31 @@ func TestGetNextSize(t *testing.T) {
 		t.Fatalf("Failed to add scheme: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			var cl client.Client
-			if tt.listError != nil {
-				cl = &MockClient{listError: tt.listError}
+			if tc.listError != nil {
+				cl = &MockClient{listError: tc.listError}
 			} else {
 				cl = fake.NewClientBuilder().
 					WithScheme(scheme).
-					WithObjects(testResources[tt.objectsKey]...).
+					WithObjects(testResources[tc.objectsKey]...).
 					Build()
 			}
 
-			gotSize, err := getNextSize(context.Background(), cl, tt.count)
+			gotSize, err := getNextSize(context.Background(), cl, tc.count)
 
-			if tt.wantErr != "" {
-				if err == nil || err.Error() != tt.wantErr {
-					t.Errorf("Error mismatch\nWant: %v\nGot:  %v", tt.wantErr, err)
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Errorf("Error mismatch\nWant: %v\nGot:  %v", tc.wantErr, err)
 				}
 				return
 			} else {
 				if err != nil {
 					t.Fatalf("Unexpected error: %v", err)
 				}
-				if gotSize != tt.wantSize {
-					t.Errorf("Size mismatch\nWant: %d\nGot:  %d", tt.wantSize, gotSize)
+				if gotSize != tc.wantSize {
+					t.Errorf("Size mismatch\nWant: %d\nGot:  %d", tc.wantSize, gotSize)
 				}
 			}
 		})
