@@ -73,7 +73,7 @@ outerLoop:
 					}
 				}
 
-				for _, rc2 := range resourceClaims {
+				for i, rc2 := range resourceClaims {
 					if rc.Name != rc2.Name {
 						for _, rc2Device := range rc2.Devices {
 							if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
@@ -82,7 +82,10 @@ outerLoop:
 									if err != nil {
 										return resourceClaims, err
 									}
-									continue outerLoop
+									resourceClaims[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
+									if err != nil {
+										return resourceClaims, err
+									}
 								}
 							}
 						}

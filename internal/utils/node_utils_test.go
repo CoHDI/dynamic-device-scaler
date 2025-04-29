@@ -1017,6 +1017,223 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			},
 		},
 		{
+			name: "ComposabilityRequestList have different model",
+			resourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-claim",
+							Namespace: "test-ns",
+						},
+						Spec: resourceapi.ResourceClaimSpec{
+							Devices: resourceapi.DeviceClaim{
+								Requests: []resourceapi.DeviceRequest{
+									{
+										Name:            "gpu",
+										DeviceClassName: "gpu.nvidia.com",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:             1,
+						CDIModelName:      "A100 40G",
+						CannotCoexistWith: []int{2},
+					},
+					{
+						Index:             2,
+						CDIModelName:      "A100 80G",
+						CannotCoexistWith: []int{1},
+					},
+				},
+			},
+			nodeInfo: types.NodeInfo{
+				Name:     "node1",
+				FabricID: "1",
+				Models: []types.ModelConstraints{
+					{
+						Model:     "A100 40G",
+						MaxDevice: 1,
+					},
+				},
+			},
+			existingRequestList: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request1",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Model: "A100 80G",
+								Size:  10,
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+			expectedResourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Failed",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 40G",
+							State: "Failed",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ResourceClaimInfo devices do not coexist",
+			resourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:              "test-claim2",
+					Namespace:         "test-ns",
+					NodeName:          "node2",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-claim",
+							Namespace: "test-ns",
+						},
+						Spec: resourceapi.ResourceClaimSpec{
+							Devices: resourceapi.DeviceClaim{
+								Requests: []resourceapi.DeviceRequest{
+									{
+										Name:            "gpu",
+										DeviceClassName: "gpu.nvidia.com",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:             1,
+						CDIModelName:      "A100 40G",
+						CannotCoexistWith: []int{2},
+					},
+					{
+						Index:             2,
+						CDIModelName:      "A100 80G",
+						CannotCoexistWith: []int{1},
+					},
+				},
+			},
+			nodeInfo: types.NodeInfo{
+				Name:     "node1",
+				FabricID: "1",
+				Models: []types.ModelConstraints{
+					{
+						Model:     "A100 40G",
+						MaxDevice: 1,
+					},
+				},
+			},
+			wantErr: false,
+			expectedResourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Failed",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 40G",
+							State: "Failed",
+						},
+					},
+				},
+				{
+					Name:              "test-claim2",
+					Namespace:         "test-ns",
+					NodeName:          "node2",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 80G",
+							State: "Failed",
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Device exceed the maximum",
 			resourceClaims: []types.ResourceClaimInfo{
 				{
@@ -1137,11 +1354,105 @@ func TestRescheduleFailedNotification(t *testing.T) {
 
 			s := scheme.Scheme
 			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
 			result, err := RescheduleFailedNotification(context.Background(), fakeClient, tc.nodeInfo, tc.resourceClaims, tc.composableDRASpec)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
+				}
+				return
+			} else if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
+				t.Errorf("resourceclaim infos are incorrect. Got: %v, Want: %v", result, tc.expectedResourceClaims)
+			}
+		})
+	}
+}
+
+func TestRescheduleNotification(t *testing.T) {
+	now := time.Now()
+	testCases := []struct {
+		name                      string
+		existingResourceClaimList *resourceapi.ResourceClaimList
+		existingResourceList      *cdioperator.ComposableResourceList
+		nodeInfo                  types.NodeInfo
+		resourceClaims            []types.ResourceClaimInfo
+		expectedResourceClaims    []types.ResourceClaimInfo
+		wantErr                   bool
+		expectedErrMsg            string
+	}{
+		{
+			name: "ResourceSlice not red",
+
+			resourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+			},
+			wantErr: false,
+			expectedResourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "device-1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "device-2",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientObjects := []runtime.Object{}
+			if tc.existingResourceClaimList != nil {
+				for i := range tc.existingResourceClaimList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceClaimList.Items[i])
+				}
+			}
+			if tc.existingResourceList != nil {
+				for i := range tc.existingResourceList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceList.Items[i])
+				}
+			}
+
+			s := scheme.Scheme
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			result, err := RescheduleNotification(context.Background(), fakeClient, tc.nodeInfo, tc.resourceClaims)
 
 			if tc.wantErr {
 				if err == nil {
