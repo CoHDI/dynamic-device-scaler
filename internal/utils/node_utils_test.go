@@ -256,12 +256,12 @@ func TestIsLastUsedOverMinute(t *testing.T) {
 				} else if err.Error() != tt.errMsg {
 					t.Errorf("Expected error message %q, got %q", tt.errMsg, err.Error())
 				}
-			} else if !tt.expectedErr {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				} else if result != tt.expectedResult {
-					t.Errorf("Expected result: %v, got %v", tt.expectedResult, result)
-				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			} else if result != tt.expectedResult {
+				t.Errorf("Expected result: %v, got %v", tt.expectedResult, result)
 			}
 		})
 	}
@@ -727,15 +727,17 @@ func TestUpdateNodeLabel(t *testing.T) {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else {
-				updatedNode, err := kubeClient.CoreV1().Nodes().Get(context.Background(), tc.nodeInfo.Name, metav1.GetOptions{})
-				if err != nil {
-					t.Fatalf("Failed to get updated node: %v", err)
-				}
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			updatedNode, err := kubeClient.CoreV1().Nodes().Get(context.Background(), tc.nodeInfo.Name, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("Failed to get updated node: %v", err)
+			}
 
-				if !reflect.DeepEqual(updatedNode.Labels, tc.expectedNodeLabels) {
-					t.Errorf("Node labels are incorrect. Got: %v, Want: %v", updatedNode.Labels, tc.expectedNodeLabels)
-				}
+			if !reflect.DeepEqual(updatedNode.Labels, tc.expectedNodeLabels) {
+				t.Errorf("Node labels are incorrect. Got: %v, Want: %v", updatedNode.Labels, tc.expectedNodeLabels)
 			}
 		})
 	}
@@ -780,7 +782,11 @@ func TestIsResourceSliceRed(t *testing.T) {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else if result != tc.expectedResult {
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result != tc.expectedResult {
 				t.Errorf("Expected result %v, got %v", tc.expectedResult, result)
 			}
 		})
@@ -1198,40 +1204,8 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
-			expectedResourceClaims: []types.ResourceClaimInfo{
-				{
-					Name:              "test-claim",
-					Namespace:         "test-ns",
-					NodeName:          "node1",
-					CreationTimestamp: metav1.Time{Time: now},
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Failed",
-						},
-						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Failed",
-						},
-					},
-				},
-				{
-					Name:              "test-claim2",
-					Namespace:         "test-ns",
-					NodeName:          "node2",
-					CreationTimestamp: metav1.Time{Time: now},
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name:  "device-1",
-							Model: "A100 80G",
-							State: "Failed",
-						},
-					},
-				},
-			},
+			wantErr:        true,
+			expectedErrMsg: "failed to get ResourceClaim: resourceclaims.resource.k8s.io \"test-claim2\" not found",
 		},
 		{
 			name: "Device exceed the maximum",
@@ -1367,7 +1341,11 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
 				t.Errorf("resourceclaim infos are incorrect. Got: %v, Want: %v", result, tc.expectedResourceClaims)
 			}
 		})
@@ -1462,7 +1440,11 @@ func TestRescheduleNotification(t *testing.T) {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
 				t.Errorf("resourceclaim infos are incorrect. Got: %v, Want: %v", result, tc.expectedResourceClaims)
 			}
 		})

@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -11,8 +10,8 @@ import (
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -101,9 +100,350 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else if !reflect.DeepEqual(result, tc.expectedResult) {
+			}
+			if !reflect.DeepEqual(result, tc.expectedResult) {
 				t.Errorf("Expected result of GetConfiguredDeviceCount. Got: %v, Want: %v", result, tc.expectedResult)
 			}
+		})
+	}
+}
+
+func TestDynamicAttach(t *testing.T) {
+	testCases := []struct {
+		name                         string
+		existingComposabilityRequest *cdioperator.ComposabilityRequestList
+		updateComposabilityRequest   *cdioperator.ComposabilityRequest
+		count                        int64
+		model                        string
+		nodeName                     string
+		wantErr                      bool
+		expectedErrMsg               string
+	}{
+		{
+			name:                       "empty update ComposabilityRequest",
+			updateComposabilityRequest: nil,
+			model:                      "A100 40G",
+			count:                      2,
+			nodeName:                   "node1",
+		},
+		{
+			name: "empty existing ComposabilityRequest",
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       2,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			count:          2,
+			wantErr:        true,
+			expectedErrMsg: "failed to get ComposabilityRequest: composabilityrequests.meta.k8s.io \"test\" not found",
+		},
+		{
+			name: "normal case",
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       2,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			count: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientObjects := []runtime.Object{}
+			if tc.existingComposabilityRequest != nil {
+				for i := range tc.existingComposabilityRequest.Items {
+					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
+				}
+			}
+
+			s := scheme.Scheme
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			err := DynamicAttach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count, tc.model, tc.nodeName)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.updateComposabilityRequest == nil {
+				crList := &cdioperator.ComposabilityRequestList{}
+				err = fakeClient.List(context.Background(), crList)
+				if err != nil {
+					t.Fatalf("Failed to list ComposabilityRequests: %v", err)
+				}
+
+				if len(crList.Items) != 1 {
+					t.Fatalf("Expected 1 ComposabilityRequest, got %d", len(crList.Items))
+				}
+
+				if crList.Items[0].Spec.Resource.Model != tc.model {
+					t.Errorf("Expected Model %q, got %q", tc.model, crList.Items[0].Spec.Resource.Model)
+				}
+				if crList.Items[0].Spec.Resource.Size != tc.count {
+					t.Errorf("Expected Size %d, got %d", tc.count, crList.Items[0].Spec.Resource.Size)
+				}
+				if crList.Items[0].Spec.Resource.TargetNode != tc.nodeName {
+					t.Errorf("Expected TargetNode %q, got %q", tc.nodeName, crList.Items[0].Spec.Resource.TargetNode)
+				}
+			} else {
+				existingCR := &cdioperator.ComposabilityRequest{}
+				err := fakeClient.Get(context.Background(), k8stypes.NamespacedName{Name: tc.updateComposabilityRequest.Name}, existingCR)
+				if err != nil {
+					t.Errorf("failed to get ComposabilityRequest: %v", err)
+				}
+
+				if existingCR.Spec.Resource.Size != tc.count {
+					t.Errorf("Expected Size %d, got %d", tc.count, existingCR.Spec.Resource.Size)
+				}
+			}
+		})
+	}
+}
+
+func TestDynamicDetach(t *testing.T) {
+	now := time.Now()
+	thirtySecondsAgo := now.Add(-30 * time.Second)
+
+	testCases := []struct {
+		name                         string
+		existingComposabilityRequest *cdioperator.ComposabilityRequestList
+		existingComposableResource   *cdioperator.ComposableResourceList
+		updateComposabilityRequest   *cdioperator.ComposabilityRequest
+		count                        int64
+		wantErr                      bool
+		expectedErrMsg               string
+		expectedSize                 int64
+	}{
+		{
+			name: "nextSize less than composabilityRequest size",
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       4,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			count: 3,
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
+						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+				},
+			},
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			expectedSize: 3,
+		},
+		{
+			name: "nextSize less than composabilityRequest size",
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       4,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			count: 3,
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
+						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+				},
+			},
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			expectedSize: 3,
+		},
+		{
+			name: "count greater than composabilityRequest size",
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       2,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			count: 4,
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			expectedSize: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientObjects := []runtime.Object{}
+			if tc.existingComposabilityRequest != nil {
+				for i := range tc.existingComposabilityRequest.Items {
+					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
+				}
+			}
+			if tc.existingComposableResource != nil {
+				for i := range tc.existingComposableResource.Items {
+					clientObjects = append(clientObjects, &tc.existingComposableResource.Items[i])
+				}
+			}
+
+			s := scheme.Scheme
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			err := DynamicDetach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			existingCR := &cdioperator.ComposabilityRequest{}
+			err = fakeClient.Get(context.Background(), k8stypes.NamespacedName{Name: tc.updateComposabilityRequest.Name}, existingCR)
+			if err != nil {
+				t.Errorf("failed to get ComposabilityRequest: %v", err)
+			}
+
+			if existingCR.Spec.Resource.Size != tc.expectedSize {
+				t.Errorf("Expected Size %d, got %d", tc.expectedSize, existingCR.Spec.Resource.Size)
+			}
+
 		})
 	}
 }
@@ -113,147 +453,151 @@ func TestGetNextSize(t *testing.T) {
 	twoMinutesAgo := now.Add(-2 * time.Minute)
 	thirtySecondsAgo := now.Add(-30 * time.Second)
 
-	testResources := map[string][]client.Object{
-		"no-qualified": {
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{Name: "res1"},
-				Status:     cdioperator.ComposableResourceStatus{State: "Online"},
-			},
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "res2",
-					DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
-					Finalizers:        []string{"dummy-finalizer"},
-				},
-				Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
-			},
-		},
-		"some-qualified": {
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "res1",
-					DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-					Finalizers:        []string{"dummy-finalizer"},
-				},
-				Status: cdioperator.ComposableResourceStatus{State: "Online"},
-			},
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "res2",
-					DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-					Finalizers:        []string{"dummy-finalizer"},
-				},
-				Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
-			},
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "res3",
-					DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-					Finalizers:        []string{"dummy-finalizer"},
-				},
-				Status: cdioperator.ComposableResourceStatus{State: "Offline"},
-			},
-		},
-		"time-unqualified": {
-			&cdioperator.ComposableResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "res1",
-					DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
-					Finalizers:        []string{"dummy-finalizer"},
-				},
-				Status: cdioperator.ComposableResourceStatus{State: "Online"},
-			},
-		},
-	}
-
 	tests := []struct {
-		name       string
-		listError  error
-		objectsKey string
-		count      int64
-		wantSize   int64
-		wantErr    string
+		name                       string
+		existingComposableResource *cdioperator.ComposableResourceList
+		count                      int64
+		wantErr                    bool
+		expectedErrMsg             string
+		expectedSize               int64
 	}{
 		{
-			name:      "List error",
-			listError: errors.New("list error"),
-			wantErr:   "failed to list ComposableResourceList: list error",
-			wantSize:  0,
-			count:     5,
+			name: "No qualified resources",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
+						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+				},
+			},
+			count:        3,
+			expectedSize: 3,
 		},
 		{
-			name:       "No qualified resources (count 3)",
-			objectsKey: "no-qualified",
-			count:      3,
-			wantSize:   3,
+			name: "Some qualified (count less than resourceCount)",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res1",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res3",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Offline"},
+					},
+				},
+			},
+			count:        1,
+			expectedSize: 1,
 		},
 		{
-			name:       "No qualified resources (count 0)",
-			objectsKey: "no-qualified",
-			count:      0,
-			wantSize:   0,
+			name: "Some qualified (count greater than resourceCount)",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res1",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res3",
+							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Offline"},
+					},
+				},
+			},
+			count:        3,
+			expectedSize: 3,
 		},
 		{
-			name:       "Some qualified (count < resourceCount)",
-			objectsKey: "some-qualified",
-			count:      1,
-			wantSize:   1,
+			name: "Time unqualified resources",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res1",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+				},
+			},
+			count:        0,
+			expectedSize: 0,
 		},
-		{
-			name:       "Some qualified (count > resourceCount)",
-			objectsKey: "some-qualified",
-			count:      3,
-			wantSize:   3,
-		},
-		{
-			name:       "Time unqualified resources",
-			objectsKey: "time-unqualified",
-			count:      0,
-			wantSize:   0,
-		},
-	}
-
-	scheme := runtime.NewScheme()
-	if err := cdioperator.AddToScheme(scheme); err != nil {
-		t.Fatalf("Failed to add scheme: %v", err)
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var cl client.Client
-			if tc.listError != nil {
-				cl = &MockClient{listError: tc.listError}
-			} else {
-				cl = fake.NewClientBuilder().
-					WithScheme(scheme).
-					WithObjects(testResources[tc.objectsKey]...).
-					Build()
+			clientObjects := []runtime.Object{}
+			if tc.existingComposableResource != nil {
+				for i := range tc.existingComposableResource.Items {
+					clientObjects = append(clientObjects, &tc.existingComposableResource.Items[i])
+				}
 			}
 
-			gotSize, err := getNextSize(context.Background(), cl, tc.count)
+			s := scheme.Scheme
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
-			if tc.wantErr != "" {
-				if err == nil || err.Error() != tc.wantErr {
-					t.Errorf("Error mismatch\nWant: %v\nGot:  %v", tc.wantErr, err)
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			gotSize, err := getNextSize(context.Background(), fakeClient, tc.count)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
 				return
-			} else {
-				if err != nil {
-					t.Fatalf("Unexpected error: %v", err)
-				}
-				if gotSize != tc.wantSize {
-					t.Errorf("Size mismatch\nWant: %d\nGot:  %d", tc.wantSize, gotSize)
-				}
+			}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if gotSize != tc.expectedSize {
+				t.Errorf("Size mismatch\nWant: %d\nGot:  %d", tc.expectedSize, gotSize)
 			}
 		})
 	}
-}
-
-type MockClient struct {
-	client.Client
-	listError error
-}
-
-func (m *MockClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	return m.listError
 }

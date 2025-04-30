@@ -188,10 +188,10 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				if err.Error() != tc.expectedErrMsg {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
-			} else {
-				if !reflect.DeepEqual(result, tc.expectedResourceClaimInfo) {
-					t.Errorf("Expected ResourceClaim info. Got: %v, Want: %v", result, tc.expectedResourceClaimInfo)
-				}
+				return
+			}
+			if !reflect.DeepEqual(result, tc.expectedResourceClaimInfo) {
+				t.Errorf("Expected ResourceClaim info. Got: %v, Want: %v", result, tc.expectedResourceClaimInfo)
 			}
 		})
 	}
@@ -283,10 +283,153 @@ func TestGetResourceSliceInfo(t *testing.T) {
 				if err.Error() != tc.expectedErrMsg {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
-			} else {
-				if !reflect.DeepEqual(result, tc.expectedResourceSliceInfo) {
-					t.Errorf("Expected ResourceSlice info. Got: %v, Want: %v", result, tc.expectedResourceSliceInfo)
+				return
+			}
+			if !reflect.DeepEqual(result, tc.expectedResourceSliceInfo) {
+				t.Errorf("Expected ResourceSlice info. Got: %v, Want: %v", result, tc.expectedResourceSliceInfo)
+			}
+		})
+	}
+}
+
+func TestGetNodeInfo(t *testing.T) {
+	testCases := []struct {
+		name              string
+		existingNode      *corev1.NodeList
+		composableDRASpec types.ComposableDRASpec
+		expectedNodeInfos []types.NodeInfo
+		wantErr           bool
+		expectedErrMsg    string
+	}{
+		{
+			name: "normal case",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "2",
+								"composable.fsastech.com/nvidia-a100-80g-size-max": "6",
+							},
+						},
+					},
+				},
+			},
+			expectedNodeInfos: []types.NodeInfo{
+				{
+					Name:     "node1",
+					FabricID: "123",
+					Models: []types.ModelConstraints{
+						{
+							Model:      "A100 80G",
+							DeviceName: "nvidia-a100-80g",
+							MinDevice:  2,
+							MaxDevice:  6,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "error get model name",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 40G",
+						K8sDeviceName: "nvidia-a100-40g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "2",
+								"composable.fsastech.com/nvidia-a100-80g-size-max": "6",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "unknown device name: nvidia-a100-80g",
+		},
+		{
+			name: "invalid integer",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "ss",
+								"composable.fsastech.com/nvidia-a100-80g-size-max": "6",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "invalid integer in ss: strconv.Atoi: parsing \"ss\": invalid syntax",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			kubeObjects := []runtime.Object{}
+			if tc.existingNode != nil {
+				kubeObjects = append(kubeObjects, tc.existingNode)
+			}
+			kubeClient := k8sfake.NewClientset(kubeObjects...)
+
+			result, err := GetNodeInfo(context.Background(), kubeClient, tc.composableDRASpec)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
 				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(result, tc.expectedNodeInfos) {
+				t.Errorf("NodeInfos are incorrect. Got: %v, Want: %v", result, tc.expectedNodeInfos)
 			}
 		})
 	}
@@ -342,13 +485,13 @@ func TestGetModelName(t *testing.T) {
 				if err.Error() != tc.expectedErrMsg {
 					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if result != tc.expectedResult {
-					t.Errorf("Unexpected model name. Got: %s, Want: %s", result, tc.expectedErrMsg)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result != tc.expectedResult {
+				t.Errorf("Unexpected model name. Got: %s, Want: %s", result, tc.expectedErrMsg)
 			}
 		})
 	}
@@ -463,13 +606,13 @@ func TestGetConfigMapInfo(t *testing.T) {
 				if !strings.Contains(err.Error(), tc.expectedErrMsg) {
 					t.Errorf("error message %q does not contain %q", err.Error(), tc.expectedErrMsg)
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if !reflect.DeepEqual(result, tc.wantSpec) {
-					t.Errorf("got %+v, want %+v", result, tc.wantSpec)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(result, tc.wantSpec) {
+				t.Errorf("got %+v, want %+v", result, tc.wantSpec)
 			}
 		})
 	}
