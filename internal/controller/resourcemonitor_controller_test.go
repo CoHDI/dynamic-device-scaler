@@ -17,16 +17,232 @@ limitations under the License.
 package controller
 
 import (
-	. "github.com/onsi/ginkgo/v2"
+	"context"
+	"testing"
+	"time"
+
+	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
+	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var _ = Describe("ResourceMonitor Controller", func() {
-	Context("When reconciling a resource", func() {
+func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
+	testCases := []struct {
+		name                  string
+		existingResourceList  *cdioperator.ComposableResourceList
+		resourceSliceInfoList []types.ResourceSliceInfo
+		resourceClaimInfoList []types.ResourceClaimInfo
+		labelPrefix           string
+		wantErr               bool
+		expectedErrMsg        string
+		expectedUpdate        bool
+	}{
+		{
+			name:        "empty resource",
+			labelPrefix: "test",
+		},
+		{
+			name:        "none Online resource",
+			labelPrefix: "test",
+			existingResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "rs0",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Type:  "gpu",
+							Model: "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State: "Running",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:        "resource update failed",
+			labelPrefix: "test",
+			existingResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						Spec: cdioperator.ComposableResourceSpec{
+							Type:  "gpu",
+							Model: "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
+			resourceSliceInfoList: []types.ResourceSliceInfo{
+				{
+					Name: "rs0",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "123",
+						},
+					},
+				},
+			},
+			resourceClaimInfoList: []types.ResourceClaimInfo{
+				{
+					Name: "ra0",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name: "gpu0",
+						},
+					},
+				},
+			},
+			expectedUpdate: false,
+			wantErr:        true,
+			expectedErrMsg: "failed to update ComposableResource:  \"\" is invalid: metadata.name: Required value: name is required",
+		},
+		{
+			name:        "resource do not match ResourceSliceInfo",
+			labelPrefix: "test",
+			existingResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "rs0",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Type:  "gpu",
+							Model: "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
+			resourceSliceInfoList: []types.ResourceSliceInfo{
+				{
+					Name: "rs0",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfoList: []types.ResourceClaimInfo{
+				{
+					Name: "ra0",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name: "gpu0",
+						},
+					},
+				},
+			},
+			expectedUpdate: false,
+		},
+		{
+			name:        "normal case",
+			labelPrefix: "test",
+			existingResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "rs0",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Type:  "gpu",
+							Model: "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
+			resourceSliceInfoList: []types.ResourceSliceInfo{
+				{
+					Name: "rs0",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "123",
+						},
+					},
+				},
+			},
+			resourceClaimInfoList: []types.ResourceClaimInfo{
+				{
+					Name: "ra0",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name: "gpu0",
+						},
+					},
+				},
+			},
+			expectedUpdate: true,
+		},
+	}
 
-		It("should successfully reconcile the resource", func() {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientObjects := []runtime.Object{}
+			if tc.existingResourceList != nil {
+				for i := range tc.existingResourceList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceList.Items[i])
+				}
+			}
 
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			s := scheme.Scheme
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			resourceController := &ResourceMonitorReconciler{
+				Client: fakeClient,
+			}
+
+			err := resourceController.updateComposableResourceLastUsedTime(context.Background(), tc.resourceSliceInfoList, tc.resourceClaimInfoList, tc.labelPrefix)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				if err.Error() != tc.expectedErrMsg {
+					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			resourceList := &cdioperator.ComposableResourceList{}
+			err = fakeClient.List(context.Background(), resourceList)
+			if err != nil {
+				t.Errorf("failed to get resourceList: %v", err)
+			}
+
+			for _, rs := range resourceList.Items {
+				if tc.expectedUpdate {
+					assert.Contains(t, rs.Annotations, tc.labelPrefix+"/last-used-time")
+					_, err := time.Parse(time.RFC3339, rs.Annotations[tc.labelPrefix+"/last-used-time"])
+					assert.NoError(t, err)
+				} else {
+					assert.Nil(t, rs.Annotations)
+				}
+			}
 		})
-	})
-})
+	}
+}

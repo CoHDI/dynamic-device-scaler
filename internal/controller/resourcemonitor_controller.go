@@ -145,7 +145,7 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 					}
 
 					currentTime := time.Now().Format(time.RFC3339)
-					resource.Annotations[labelPrefix+"last-used-time"] = currentTime
+					resource.Annotations[labelPrefix+"/last-used-time"] = currentTime
 					if err := r.Update(ctx, &resource); err != nil {
 						return fmt.Errorf("failed to update ComposableResource: %w", err)
 					}
