@@ -19,6 +19,8 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -91,9 +93,12 @@ func main() {
 	}
 
 	if err = (&controller.ResourceMonitorReconciler{
-		Client:    mgr.GetClient(),
-		ClientSet: clientSet,
-		Scheme:    mgr.GetScheme(),
+		Client:             mgr.GetClient(),
+		ClientSet:          clientSet,
+		Scheme:             mgr.GetScheme(),
+		ScanInterval:       time.Duration(getEnvAsInt("SCAN_INTERVAL", 60)) * time.Second,
+		DeviceNoRemoval:    time.Duration(getEnvAsInt("DEVICE_NO_REMOVAL_DURATION", 600)) * time.Second,
+		DeviceNoAllocation: time.Duration(getEnvAsInt("DEVICE_NO_ALLOCATION_DURATION", 60)) * time.Second,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceMonitor")
 		os.Exit(1)
@@ -114,4 +119,16 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func getEnvAsInt(name string, defaultValue int) int {
+	valueStr := os.Getenv(name)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
 }

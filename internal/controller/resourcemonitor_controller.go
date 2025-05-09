@@ -37,9 +37,12 @@ import (
 // ResourceMonitorReconciler reconciles a ResourceMonitor object
 type ResourceMonitorReconciler struct {
 	client.Client
-	ClientSet *kubernetes.Clientset
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
+	ClientSet          *kubernetes.Clientset
+	Log                logr.Logger
+	Scheme             *runtime.Scheme
+	ScanInterval       time.Duration
+	DeviceNoRemoval    time.Duration
+	DeviceNoAllocation time.Duration
 }
 
 //+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims,verbs=get;list;watch;update;patch
@@ -78,7 +81,7 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+	return ctrl.Result{RequeueAfter: r.ScanInterval}, err
 }
 
 func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.ResourceClaimInfo, []types.ResourceSliceInfo, []types.NodeInfo, types.ComposableDRASpec, error) {
