@@ -121,16 +121,18 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 			continue
 		}
 
-		var deviceName string
-
+		var deviceName, resourceSliceName string
 		found := false
 	ResourceSliceLoop:
 		for _, rs := range resourceSliceInfoList {
-			for _, device := range rs.Devices {
-				if device.UUID == resource.Status.DeviceID {
-					found = true
-					deviceName = device.Name
-					break ResourceSliceLoop
+			if rs.State == types.ResourceSliceStateRed {
+				for _, device := range rs.Devices {
+					if device.UUID == resource.Status.DeviceID {
+						found = true
+						deviceName = device.Name
+						resourceSliceName = rs.Name
+						break ResourceSliceLoop
+					}
 				}
 			}
 		}
@@ -141,18 +143,20 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 
 	ResourceLoop:
 		for _, rc := range resourceClaimInfoList {
-			for _, device := range rc.Devices {
-				if device.Name == deviceName {
-					if resource.Annotations == nil {
-						resource.Annotations = make(map[string]string)
-					}
+			if rc.ResourceSliceName == resourceSliceName {
+				for _, device := range rc.Devices {
+					if device.Name == deviceName {
+						if resource.Annotations == nil {
+							resource.Annotations = make(map[string]string)
+						}
 
-					currentTime := time.Now().Format(time.RFC3339)
-					resource.Annotations[labelPrefix+"/last-used-time"] = currentTime
-					if err := r.Update(ctx, &resource); err != nil {
-						return fmt.Errorf("failed to update ComposableResource: %w", err)
+						currentTime := time.Now().Format(time.RFC3339)
+						resource.Annotations[labelPrefix+"/last-used-time"] = currentTime
+						if err := r.Update(ctx, &resource); err != nil {
+							return fmt.Errorf("failed to update ComposableResource: %w", err)
+						}
+						break ResourceLoop
 					}
-					break ResourceLoop
 				}
 			}
 		}

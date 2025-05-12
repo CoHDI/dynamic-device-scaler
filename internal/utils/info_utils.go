@@ -23,6 +23,11 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 		return nil, fmt.Errorf("failed to list ResourceClaims: %v", err)
 	}
 
+	resourceSliceList := &resourceapi.ResourceSliceList{}
+	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
+		return nil, fmt.Errorf("failed to list ResourceClaims: %v", err)
+	}
+
 	for _, rc := range resourceClaimList.Items {
 		if len(rc.Status.ReservedFor) == 0 {
 			continue
@@ -39,7 +44,22 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 			// 	continue
 			// }
 			var deviceInfo types.ResourceClaimDevice
-			deviceInfo.Name = device.Driver
+			deviceInfo.Name = device.Device
+
+			if resourceClaimInfo.NodeName == "" {
+			ResourceSliceLoop:
+				for _, rs := range resourceSliceList.Items {
+					if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
+						for _, device := range rs.Spec.Devices {
+							if device.Name == deviceInfo.Name {
+								resourceClaimInfo.NodeName = rs.Spec.NodeName
+								resourceClaimInfo.ResourceSliceName = rs.Name
+								break ResourceSliceLoop
+							}
+						}
+					}
+				}
+			}
 
 			if device.Conditions != nil {
 				if device.Conditions[0].Type == "FabricDeviceReschedule" && device.Conditions[0].Status == "True" {
