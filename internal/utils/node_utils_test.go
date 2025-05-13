@@ -802,6 +802,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 		nodeInfo                  types.NodeInfo
 		composableDRASpec         types.ComposableDRASpec
 		resourceClaims            []types.ResourceClaimInfo
+		resourceSlices            []types.ResourceSliceInfo
 		expectedResourceClaims    []types.ResourceClaimInfo
 		wantErr                   bool
 		expectedErrMsg            string
@@ -1331,7 +1332,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			result, err := RescheduleFailedNotification(context.Background(), fakeClient, tc.nodeInfo, tc.resourceClaims, tc.composableDRASpec)
+			result, err := RescheduleFailedNotification(context.Background(), fakeClient, tc.nodeInfo, tc.resourceClaims, tc.resourceSlices, tc.composableDRASpec)
 
 			if tc.wantErr {
 				if err == nil {

@@ -2,12 +2,12 @@ package utils
 
 import (
 	"context"
-	"reflect"
 	"testing"
 	"time"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -17,20 +17,92 @@ import (
 
 func TestGetConfiguredDeviceCount(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		existingResourceList *cdioperator.ComposableResourceList
-		resourceClaims       []types.ResourceClaimInfo
-		expectedResult       map[string]int
-		wantErr              bool
-		expectedErrMsg       string
+		name                         string
+		existingComposabilityRequest *cdioperator.ComposabilityRequestList
+		existingResourceClaim        *resourceapi.ResourceClaimList
+		resourceClaimInfos           []types.ResourceClaimInfo
+		resourceSliceInfos           []types.ResourceSliceInfo
+		model                        string
+		expectedResult               int64
+		wantErr                      bool
+		expectedErrMsg               string
 	}{
 		{
-			name:           "empty resource claim info",
-			expectedResult: map[string]int{},
-		},
-		{
-			name: "resource cliam with preparing state devices",
-			resourceClaims: []types.ResourceClaimInfo{
+			name: "normal case",
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request1",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Model: "A100 40G",
+							},
+						},
+						Status: cdioperator.ComposabilityRequestStatus{
+							Resources: map[string]cdioperator.ScalarResourceStatus{
+								"resource1": {
+									State:        "Online",
+									DeviceIDUUID: "123",
+								},
+								"resource2": {
+									State:        "Online",
+									DeviceIDUUID: "456",
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "claim1",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device1",
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device2",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod1",
+									Resource: "pods",
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name:   "rs1",
+					Driver: "gpu.nvidia.com",
+					Pool:   "test",
+					State:  types.ResourceSliceStateRed,
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "device1",
+							UUID: "123",
+						},
+						{
+							Name: "device2",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfos: []types.ResourceClaimInfo{
 				{
 					Name: "test",
 					Devices: []types.ResourceClaimDevice{
@@ -47,50 +119,31 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 					},
 				},
 			},
-			expectedResult: map[string]int{
-				"A100 40G": 2,
-			},
-		},
-		{
-			name: "resource cliam with other state devices",
-			resourceClaims: []types.ResourceClaimInfo{
-				{
-					Name: "test",
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name:  "GPU1",
-							Model: "A100 40G",
-							State: "Preparing",
-						},
-						{
-							Name:  "GPU2",
-							Model: "A100 40G",
-							State: "Failed",
-						},
-					},
-				},
-			},
-			expectedResult: map[string]int{
-				"A100 40G": 1,
-			},
+			model:          "A100 40G",
+			expectedResult: 4,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
-			if tc.existingResourceList != nil {
-				for i := range tc.existingResourceList.Items {
-					clientObjects = append(clientObjects, &tc.existingResourceList.Items[i])
+			if tc.existingComposabilityRequest != nil {
+				for i := range tc.existingComposabilityRequest.Items {
+					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
+				}
+			}
+			if tc.existingResourceClaim != nil {
+				for i := range tc.existingResourceClaim.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceClaim.Items[i])
 				}
 			}
 
 			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			result, err := GetConfiguredDeviceCount(context.Background(), fakeClient, tc.resourceClaims)
+			result, err := GetConfiguredDeviceCount(context.Background(), fakeClient, tc.model, tc.resourceClaimInfos, tc.resourceSliceInfos)
 
 			if tc.wantErr {
 				if err == nil {
@@ -101,8 +154,13 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 				}
 				return
 			}
-			if !reflect.DeepEqual(result, tc.expectedResult) {
-				t.Errorf("Expected result of GetConfiguredDeviceCount. Got: %v, Want: %v", result, tc.expectedResult)
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if result != tc.expectedResult {
+				t.Errorf("Unexpected result. Got: %v, Want: %v", result, tc.expectedResult)
 			}
 		})
 	}
@@ -596,7 +654,7 @@ func TestGetNextSize(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 			if gotSize != tc.expectedSize {
-				t.Errorf("Size mismatch\nWant: %d\nGot:  %d", tc.expectedSize, gotSize)
+				t.Errorf("Unexpected size. Want: %d, Got:  %d", tc.expectedSize, gotSize)
 			}
 		})
 	}

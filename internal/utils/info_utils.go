@@ -99,6 +99,7 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfo.CreationTimestamp = rs.CreationTimestamp
 		resourceSliceInfo.Driver = rs.Spec.Driver
 		resourceSliceInfo.NodeName = rs.Spec.NodeName
+		resourceSliceInfo.Pool = rs.Spec.Pool.Name
 
 		//TODO: wait for KEP5007
 		// if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {

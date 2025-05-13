@@ -6,33 +6,95 @@ import (
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, resourceClaims []types.ResourceClaimInfo) (map[string]int, error) {
-	deviceCount := make(map[string]int)
+func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, model string, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
+	preparingDeviceCount := getPreparingDevicesCount(resourceClaimInfos, model)
 
-	for _, rc := range resourceClaims {
-		isRed, err := isResourceSliceRed(ctx, kubeClient, rc.Name)
-		if err != nil {
-			return deviceCount, err
-		}
+	podAllocatedDevicesCount, err := getPodAllocatedDevicesCount(ctx, kubeClient, model, resourceSliceInfos)
+	if err != nil {
+		return 0, err
+	}
+
+	return preparingDeviceCount + podAllocatedDevicesCount, nil
+}
+
+func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model string) int64 {
+	var count int64
+
+	for _, rc := range resourceClaimInfos {
 		for _, device := range rc.Devices {
-			if device.State != "Preparing" {
-				continue
-			}
-
-			deviceCount[device.Model]++
-
-			if isRed && device.UsedByPod {
-				deviceCount[device.Model]++
+			if device.Model == model {
+				if device.State == "Preparing" {
+					count++
+				}
 			}
 		}
 	}
 
-	return deviceCount, nil
+	return count
+}
+
+func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, model string, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
+	var count int64
+
+	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
+	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
+		return count, fmt.Errorf("failed to list composabilityRequestList: %v", err)
+	}
+
+	for _, request := range composabilityRequestList.Items {
+		if request.Spec.Resource.Model == model {
+			for _, resource := range request.Status.Resources {
+				if resource.State == "Online" {
+					used, err := DeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, resourceSliceInfos)
+					if err != nil {
+						return count, err
+					}
+					if used {
+						count++
+					}
+				}
+			}
+		}
+	}
+
+	return count, nil
+}
+
+func DeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, error) {
+	resourceClaimList := &resourceapi.ResourceClaimList{}
+	if err := kubeClient.List(ctx, resourceClaimList, &client.ListOptions{}); err != nil {
+		return false, fmt.Errorf("failed to list ResourceClaims: %v", err)
+	}
+
+	for _, resourceSlice := range resourceSliceInfos {
+		if resourceSlice.State == types.ResourceSliceStateRed {
+			for _, resourceSliceDevice := range resourceSlice.Devices {
+				if resourceSliceDevice.UUID == deviceID {
+					for _, resourceClaim := range resourceClaimList.Items {
+						for _, resourceClaimDevice := range resourceClaim.Status.Devices {
+							if resourceSlice.Pool == resourceClaimDevice.Pool &&
+								resourceSlice.Driver == resourceClaimDevice.Driver &&
+								resourceSliceDevice.Name == resourceClaimDevice.Device {
+								if resourceClaim.Status.ReservedFor != nil {
+									if resourceClaim.Status.ReservedFor[0].Resource == "pods" {
+										return true, nil
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false, nil
 }
 
 func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, model, nodeName string) error {

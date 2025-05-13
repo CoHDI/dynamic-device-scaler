@@ -76,7 +76,7 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	err = r.handleNodes(ctx, nodeInfos, resourceClaimInfos, composableDRASpec)
+	err = r.handleNodes(ctx, nodeInfos, resourceClaimInfos, resourceSliceInfos, composableDRASpec)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -110,7 +110,7 @@ func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.Re
 	return resourceClaimInfos, resourceSliceInfos, nodeInfos, composableDRASpec, nil
 }
 
-func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx context.Context, resourceSliceInfoList []types.ResourceSliceInfo, resourceClaimInfoList []types.ResourceClaimInfo, labelPrefix string) error {
+func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx context.Context, resourceSliceInfos []types.ResourceSliceInfo, resourceClaimInfos []types.ResourceClaimInfo, labelPrefix string) error {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := r.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return fmt.Errorf("failed to list ComposableResourceList: %v", err)
@@ -124,7 +124,7 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 		var deviceName, resourceSliceName string
 		found := false
 	ResourceSliceLoop:
-		for _, rs := range resourceSliceInfoList {
+		for _, rs := range resourceSliceInfos {
 			if rs.State == types.ResourceSliceStateRed {
 				for _, device := range rs.Devices {
 					if device.UUID == resource.Status.DeviceID {
@@ -142,7 +142,7 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 		}
 
 	ResourceLoop:
-		for _, rc := range resourceClaimInfoList {
+		for _, rc := range resourceClaimInfos {
 			if rc.ResourceSliceName == resourceSliceName {
 				for _, device := range rc.Devices {
 					if device.Name == deviceName {
@@ -165,10 +165,10 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 	return nil
 }
 
-func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec types.ComposableDRASpec) error {
+func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
 	var err error
 	for _, nodeInfo := range nodeInfos {
-		resourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, resourceClaimInfos, composableDRASpec)
+		resourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 			return err
 		}
 
-		err = r.handleDevices(ctx, nodeInfo, resourceClaimInfos, composableDRASpec)
+		err = r.handleDevices(ctx, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
 			return err
 		}
@@ -192,32 +192,30 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 	return nil
 }
 
-func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, composableDRASpec types.ComposableDRASpec) error {
-	deviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, resourceClaimInfos)
-	if err != nil {
-		return err
-	}
-
+func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := r.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return err
 	}
 
-	var requiredCount, actualCount int64
+	var actualCount int64
 	var exit bool
 	for _, device := range composableDRASpec.DeviceInfos {
-		requiredCount = int64(deviceCount[device.CDIModelName])
+		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, resourceClaimInfos, resourceSliceInfos)
+		if err != nil {
+			return err
+		}
 		exit = false
 		for _, cr := range composabilityRequestList.Items {
 			if cr.Spec.Resource.Model == device.CDIModelName {
 				actualCount = cr.Spec.Resource.Size
-				if requiredCount > actualCount {
-					err := utils.DynamicAttach(ctx, r.Client, &cr, requiredCount, device.CDIModelName, nodeInfo.Name)
+				if cofiguredDeviceCount > actualCount {
+					err := utils.DynamicAttach(ctx, r.Client, &cr, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
 					if err != nil {
 						return err
 					}
-				} else if requiredCount < actualCount {
-					err := utils.DynamicDetach(ctx, r.Client, &cr, requiredCount)
+				} else if cofiguredDeviceCount < actualCount {
+					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount)
 					if err != nil {
 						return err
 					}
@@ -226,8 +224,8 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 				break
 			}
 		}
-		if !exit && requiredCount > 0 {
-			err := utils.DynamicAttach(ctx, r.Client, nil, requiredCount, device.CDIModelName, nodeInfo.Name)
+		if !exit && cofiguredDeviceCount > 0 {
+			err := utils.DynamicAttach(ctx, r.Client, nil, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
 			if err != nil {
 				return err
 			}

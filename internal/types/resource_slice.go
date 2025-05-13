@@ -20,6 +20,7 @@ type ResourceSliceInfo struct {
 	FabricID          string                `json:"fabric_id"`
 	FabricModel       string                `json:"fabric_model"`
 	Devices           []ResourceSliceDevice `json:"devices"`
+	Pool              string                `json:"pool"`
 }
 
 type ResourceSliceDevice struct {
