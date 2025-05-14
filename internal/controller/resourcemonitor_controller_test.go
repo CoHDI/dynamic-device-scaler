@@ -36,7 +36,6 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 		name                  string
 		existingResourceList  *cdioperator.ComposableResourceList
 		resourceSliceInfoList []types.ResourceSliceInfo
-		resourceClaimInfoList []types.ResourceClaimInfo
 		labelPrefix           string
 		wantErr               bool
 		expectedErrMsg        string
@@ -94,16 +93,6 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 					},
 				},
 			},
-			resourceClaimInfoList: []types.ResourceClaimInfo{
-				{
-					Name: "ra0",
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name: "gpu0",
-						},
-					},
-				},
-			},
 			expectedUpdate: false,
 			wantErr:        true,
 			expectedErrMsg: "failed to update ComposableResource:  \"\" is invalid: metadata.name: Required value: name is required",
@@ -135,16 +124,6 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 						{
 							Name: "gpu0",
 							UUID: "456",
-						},
-					},
-				},
-			},
-			resourceClaimInfoList: []types.ResourceClaimInfo{
-				{
-					Name: "ra0",
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name: "gpu0",
 						},
 					},
 				},
@@ -182,16 +161,6 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 					},
 				},
 			},
-			resourceClaimInfoList: []types.ResourceClaimInfo{
-				{
-					Name: "ra0",
-					Devices: []types.ResourceClaimDevice{
-						{
-							Name: "gpu0",
-						},
-					},
-				},
-			},
 			expectedUpdate: true,
 		},
 	}
@@ -213,7 +182,7 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 				Client: fakeClient,
 			}
 
-			err := resourceController.updateComposableResourceLastUsedTime(context.Background(), tc.resourceSliceInfoList, tc.resourceClaimInfoList, tc.labelPrefix)
+			err := resourceController.updateComposableResourceLastUsedTime(context.Background(), tc.resourceSliceInfoList, tc.labelPrefix)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
