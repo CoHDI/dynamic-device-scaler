@@ -8,7 +8,6 @@ import (
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -102,7 +101,7 @@ func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 		return createNewComposabilityRequestCR(ctx, kubeClient, count, model, nodeName)
 	}
 
-	return updateComposabilityRequestCR(ctx, kubeClient, cr, count)
+	return PatchComposabilityRequestSize(ctx, kubeClient, cr, count)
 }
 
 func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, model, node string) error {
@@ -127,23 +126,6 @@ func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Clie
 	return nil
 }
 
-func updateComposabilityRequestCR(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64) error {
-	existingCR := &cdioperator.ComposabilityRequest{}
-	err := kubeClient.Get(ctx, k8stypes.NamespacedName{Name: cr.Name}, existingCR)
-	if err != nil {
-		return fmt.Errorf("failed to get ComposabilityRequest: %v", err)
-	}
-
-	patch := client.MergeFrom(existingCR.DeepCopy())
-	existingCR.Spec.Resource.Size = count
-
-	if err := kubeClient.Patch(ctx, existingCR, patch); err != nil {
-		return fmt.Errorf("failed to patch ComposabilityRequest: %v", err)
-	}
-
-	return nil
-}
-
 func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64) error {
 	if count < cr.Spec.Resource.Size {
 		nextSize, err := getNextSize(ctx, kubeClient, count)
@@ -152,7 +134,7 @@ func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 		}
 
 		if nextSize < cr.Spec.Resource.Size {
-			return updateComposabilityRequestCR(ctx, kubeClient, cr, nextSize)
+			return PatchComposabilityRequestSize(ctx, kubeClient, cr, nextSize)
 		}
 	}
 
