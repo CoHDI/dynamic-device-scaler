@@ -9,7 +9,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -114,7 +113,7 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 		existingCR := &cdioperator.ComposabilityRequest{}
 		err := kubeClient.Get(
 			ctx,
-			k8stypes.NamespacedName{Name: cr.Name, Namespace: cr.Namespace},
+			types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace},
 			existingCR,
 		)
 		if err != nil {
