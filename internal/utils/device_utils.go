@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"time"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
@@ -50,12 +51,15 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 		if request.Spec.Resource.Model == model {
 			for _, resource := range request.Status.Resources {
 				if resource.State == "Online" {
-					used, err := DeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, resourceSliceInfos)
-					if err != nil {
-						return count, err
-					}
-					if used {
-						count++
+					isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.DeviceIDUUID, resourceSliceInfos)
+					if isRed {
+						isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, *resourceSliceInfo)
+						if err != nil {
+							return count, err
+						}
+						if isUsed {
+							count++
+						}
 					}
 				}
 			}
@@ -65,30 +69,38 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 	return count, nil
 }
 
-func DeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, error) {
+func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceID string, resourceSliceInfo types.ResourceSliceInfo) (bool, error) {
 	resourceClaimList := &resourceapi.ResourceClaimList{}
 	if err := kubeClient.List(ctx, resourceClaimList, &client.ListOptions{}); err != nil {
 		return false, fmt.Errorf("failed to list ResourceClaims: %v", err)
 	}
 
-	for _, resourceSlice := range resourceSliceInfos {
-		if resourceSlice.State == types.ResourceSliceStateRed {
-			for _, resourceSliceDevice := range resourceSlice.Devices {
-				if resourceSliceDevice.UUID == deviceID {
-					for _, resourceClaim := range resourceClaimList.Items {
-						for _, resourceClaimDevice := range resourceClaim.Status.Devices {
-							if resourceSlice.Pool == resourceClaimDevice.Pool &&
-								resourceSlice.Driver == resourceClaimDevice.Driver &&
-								resourceSliceDevice.Name == resourceClaimDevice.Device {
-								if resourceClaim.Status.ReservedFor != nil {
-									if resourceClaim.Status.ReservedFor[0].Resource == "pods" {
-										return true, nil
-									}
-								}
+	for _, resourceSliceDevice := range resourceSliceInfo.Devices {
+		if resourceSliceDevice.UUID == deviceID {
+			for _, resourceClaim := range resourceClaimList.Items {
+				for _, resourceClaimDevice := range resourceClaim.Status.Devices {
+					if resourceSliceInfo.Pool == resourceClaimDevice.Pool &&
+						resourceSliceInfo.Driver == resourceClaimDevice.Driver &&
+						resourceSliceDevice.Name == resourceClaimDevice.Device {
+						if resourceClaim.Status.ReservedFor != nil {
+							if resourceClaim.Status.ReservedFor[0].Resource == "pods" {
+								return true, nil
 							}
 						}
 					}
 				}
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, *types.ResourceSliceInfo) {
+	for _, resourceSlice := range resourceSliceInfos {
+		for _, resourceSliceDevice := range resourceSlice.Devices {
+			if resourceSliceDevice.UUID == deviceID {
+				return resourceSlice.State == types.ResourceSliceStateRed, &resourceSlice
 			}
 		}
 	}
@@ -126,9 +138,9 @@ func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Clie
 	return nil
 }
 
-func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64) error {
+func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, labelPrefix string, deviceNoAllocation time.Duration) error {
 	if count < cr.Spec.Resource.Size {
-		nextSize, err := getNextSize(ctx, kubeClient, count)
+		nextSize, err := getNextSize(ctx, kubeClient, count, labelPrefix, deviceNoAllocation)
 		if err != nil {
 			return fmt.Errorf("failed to get next size: %v", err)
 		}
@@ -141,7 +153,7 @@ func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 	return nil
 }
 
-func getNextSize(ctx context.Context, kubeClient client.Client, count int64) (int64, error) {
+func getNextSize(ctx context.Context, kubeClient client.Client, count int64, labelPrefix string, deviceNoAllocation time.Duration) (int64, error) {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return 0, fmt.Errorf("failed to list ComposableResourceList: %v", err)
@@ -150,7 +162,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64) (in
 	var resourceCount int64
 	for _, resource := range resourceList.Items {
 		if (resource.Status.State == "Online" || resource.Status.State == "Attaching") && resource.DeletionTimestamp != nil {
-			over, err := isLastUsedOverMinute(resource)
+			over, err := isLastUsedOverTime(resource, labelPrefix, deviceNoAllocation)
 			if err != nil || !over {
 				continue
 			}

@@ -71,10 +71,6 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 				}
 			}
 
-			if rc.Status.ReservedFor[0].Resource == "pods" {
-				deviceInfo.UsedByPod = true
-			}
-
 			resourceClaimInfo.Devices = append(resourceClaimInfo.Devices, deviceInfo)
 		}
 

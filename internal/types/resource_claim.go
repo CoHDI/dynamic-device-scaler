@@ -12,8 +12,7 @@ type ResourceClaimInfo struct {
 }
 
 type ResourceClaimDevice struct {
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	State     string `json:"state"`
-	UsedByPod bool   `json:"used_by_pod"`
+	Name  string `json:"name"`
+	Model string `json:"model"`
+	State string `json:"state"`
 }
