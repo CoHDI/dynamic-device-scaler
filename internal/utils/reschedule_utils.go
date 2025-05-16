@@ -17,9 +17,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func sortByTime(resourceClaims []types.ResourceClaimInfo) {
+func sortByTime(resourceClaims []types.ResourceClaimInfo, order string) {
 	sort.Slice(resourceClaims, func(i, j int) bool {
-		return resourceClaims[i].CreationTimestamp.After(resourceClaims[j].CreationTimestamp.Time)
+		timeI := resourceClaims[i].CreationTimestamp.Time
+		timeJ := resourceClaims[j].CreationTimestamp.Time
+
+		if order == "Ascending" {
+			return timeI.Before(timeJ)
+		} else {
+			return timeI.After(timeJ)
+		}
 	})
 }
 
@@ -29,7 +36,7 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 		return resourceClaimInfos, err
 	}
 
-	sortByTime(resourceClaimInfos)
+	sortByTime(resourceClaimInfos, "Descending")
 
 	var err error
 
@@ -121,58 +128,60 @@ outerLoop:
 	return resourceClaimInfos, nil
 }
 
-func RescheduleNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo) ([]types.ResourceClaimInfo, error) {
-	resourceList := &cdioperator.ComposableResourceList{}
-	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
-		return resourceClaimInfos, fmt.Errorf("failed to list ComposableResourceList: %v", err)
+func RescheduleNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string, deviceNoAllocation time.Duration) ([]types.ResourceClaimInfo, error) {
+	requestList := &cdioperator.ComposabilityRequestList{}
+	if err := kubeClient.List(ctx, requestList, &client.ListOptions{}); err != nil {
+		return resourceClaimInfos, fmt.Errorf("failed to list ComposabilityRequestList: %v", err)
 	}
 
-	sortByTime(resourceClaimInfos)
+	sortByTime(resourceClaimInfos, "Ascending")
 
 	var err error
 
-	resourceUsed := make(map[string]bool)
-
-outerLoop:
+OuterLoop:
 	for k, rc := range resourceClaimInfos {
-		for _, device := range rc.Devices {
-			if device.State == "Preparing" {
-				isRed, err := isResourceSliceRed(ctx, kubeClient, device.Name)
-				if err != nil {
-					return resourceClaimInfos, err
-				}
-				if !isRed {
-					continue outerLoop
-				}
-				for _, resource := range resourceList.Items {
-					if resourceUsed[resource.Name] {
-						continue
-					}
-					if device.Model == resource.Spec.Model &&
-						device.Name == resource.Spec.TargetNode &&
-						resource.Status.State != "Online" &&
-						!device.UsedByPod {
-						over, err := isLastUsedOverMinute(resource)
-						if err != nil || !over {
-							continue
+		resourceMatched := make(map[string]bool)
+		modelMap := getUniqueModelsWithCounts(rc)
+	MiddleLoop:
+		for model, count := range modelMap {
+			for _, request := range requestList.Items {
+				matchedCount := 0
+				if request.Spec.Resource.Model == model && request.Spec.Resource.TargetNode == rc.NodeName {
+					for name, resource := range request.Status.Resources {
+						if !resourceMatched[name] && resource.State == "Online" {
+							isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.DeviceIDUUID, resourceSliceInfos)
+							if isRed {
+								isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, *resourceSliceInfo)
+								if err != nil {
+									return resourceClaimInfos, err
+								}
+								if isUsed {
+									continue
+								}
+								if matchedCount < count {
+									resourceMatched[name] = true
+									matchedCount++
+								} else {
+									continue MiddleLoop
+								}
+							}
 						}
-						resourceUsed[resource.Name] = true
-						continue outerLoop
 					}
 				}
 			}
+			continue OuterLoop
 		}
+
 		resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Reschedule", "FabricDeviceReschedule")
 		if err != nil {
 			return resourceClaimInfos, err
 		}
-		for _, resource := range resourceList.Items {
-			if resourceUsed[resource.Name] {
-				currentTime := time.Now().Format(time.RFC3339)
-				resource.Annotations["composable.test/last-used-time"] = currentTime
-				if err := kubeClient.Update(ctx, &resource); err != nil {
-					return resourceClaimInfos, fmt.Errorf("failed to update ComposableResource: %w", err)
-				}
+
+		currentTime := time.Now().Format(time.RFC3339)
+		for resourceName, _ := range resourceMatched {
+			err = PatchComposableResourceAnnotation(ctx, kubeClient, resourceName, labelPrefix+"/last-used-time", currentTime)
+			if err != nil {
+				return resourceClaimInfos, err
 			}
 		}
 	}
@@ -180,14 +189,27 @@ outerLoop:
 	return resourceClaimInfos, nil
 }
 
-func isLastUsedOverMinute(resource cdioperator.ComposableResource) (bool, error) {
+func getUniqueModelsWithCounts(resourceClaimInfo types.ResourceClaimInfo) map[string]int {
+	modelMap := make(map[string]int)
+
+	for _, device := range resourceClaimInfo.Devices {
+		if device.State == "Preaparing" {
+			modelMap[device.Model]++
+		}
+	}
+
+	return modelMap
+}
+
+func isLastUsedOverTime(resource cdioperator.ComposableResource, labelPrefix string, deviceNoAllocation time.Duration) (bool, error) {
 	annotations := resource.GetAnnotations()
 	if annotations == nil {
 		return false, fmt.Errorf("annotations not found")
 	}
-	lastUsedStr, exists := annotations["composable.test/last-used-time"]
+	label := labelPrefix + "/last-used-time"
+	lastUsedStr, exists := annotations[label]
 	if !exists {
-		return false, fmt.Errorf("annotation %s not found", "composable.test/last-used-time")
+		return false, fmt.Errorf("annotation %s not found", label)
 	}
 
 	lastUsedTime, err := time.Parse(time.RFC3339, lastUsedStr)
@@ -198,27 +220,7 @@ func isLastUsedOverMinute(resource cdioperator.ComposableResource) (bool, error)
 	now := time.Now().UTC()
 	duration := now.Sub(lastUsedTime.UTC())
 
-	return duration > time.Minute, nil
-}
-
-func isResourceSliceRed(ctx context.Context, kubeClient client.Client, claimDeviceName string) (bool, error) {
-	resourceSliceList := &resourceapi.ResourceSliceList{}
-	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
-		return false, fmt.Errorf("failed to list ResourceClaims: %v", err)
-	}
-
-	for _, rs := range resourceSliceList.Items {
-		for _, device := range rs.Spec.Devices {
-			if device.Name == claimDeviceName {
-				//TODO: wait for KEP5007
-				// if len(device.Basic.BindingConditions) == 0 {
-				// 	return true, nil
-				// }
-			}
-		}
-	}
-
-	return false, nil
+	return duration > deviceNoAllocation, nil
 }
 
 func isDeviceCoexistence(model1, model2 string, composableDRASpec types.ComposableDRASpec) bool {

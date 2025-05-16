@@ -131,12 +131,10 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:      "gpu-1",
-							UsedByPod: true,
+							Name: "gpu-1",
 						},
 						{
-							Name:      "gpu-2",
-							UsedByPod: true,
+							Name: "gpu-2",
 						},
 					},
 				},
@@ -146,19 +144,16 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:      "gpu-1",
-							UsedByPod: true,
-							State:     "Reschedule",
+							Name:  "gpu-1",
+							State: "Reschedule",
 						},
 						{
-							Name:      "gpu-2",
-							UsedByPod: true,
-							State:     "Failed",
+							Name:  "gpu-2",
+							State: "Failed",
 						},
 						{
-							Name:      "gpu-3",
-							UsedByPod: true,
-							State:     "Preparing",
+							Name:  "gpu-3",
+							State: "Preparing",
 						},
 					},
 				},

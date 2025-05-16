@@ -118,18 +118,20 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 
 	for _, resource := range resourceList.Items {
 		if resource.Status.State == "Online" {
-			used, err := utils.DeviceUsedByPod(ctx, r.Client, resource.Status.DeviceID, resourceSliceInfos)
-			if err != nil {
-				return err
-			}
-			if used {
-				currentTime := time.Now().Format(time.RFC3339)
-				if err := utils.PatchComposableResourceAnnotation(ctx, r.Client, resource.Name, labelPrefix+"/last-used-time", currentTime); err != nil {
-					return fmt.Errorf("failed to update ComposableResource: %w", err)
+			isRed, resourceSliceInfo := utils.IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
+			if isRed {
+				isUsed, err := utils.IsDeviceUsedByPod(ctx, r.Client, resource.Status.DeviceID, *resourceSliceInfo)
+				if err != nil {
+					return err
+				}
+				if isUsed {
+					currentTime := time.Now().Format(time.RFC3339)
+					if err := utils.PatchComposableResourceAnnotation(ctx, r.Client, resource.Name, labelPrefix+"/last-used-time", currentTime); err != nil {
+						return fmt.Errorf("failed to update ComposableResource: %w", err)
+					}
 				}
 			}
 		}
-
 	}
 
 	return nil
@@ -143,7 +145,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 			return err
 		}
 
-		resourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, resourceClaimInfos)
+		resourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 		if err != nil {
 			return err
 		}
@@ -185,7 +187,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 						return err
 					}
 				} else if cofiguredDeviceCount < actualCount {
-					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount)
+					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 					if err != nil {
 						return err
 					}

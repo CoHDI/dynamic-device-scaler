@@ -248,7 +248,7 @@ func TestIsLastUsedOverMinute(t *testing.T) {
 				},
 			}
 
-			result, err := isLastUsedOverMinute(resource)
+			result, err := isLastUsedOverTime(resource)
 
 			if tt.expectedErr {
 				if err == nil {
