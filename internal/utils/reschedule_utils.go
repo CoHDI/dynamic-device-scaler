@@ -129,9 +129,9 @@ outerLoop:
 }
 
 func RescheduleNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string, deviceNoAllocation time.Duration) ([]types.ResourceClaimInfo, error) {
-	requestList := &cdioperator.ComposabilityRequestList{}
-	if err := kubeClient.List(ctx, requestList, &client.ListOptions{}); err != nil {
-		return resourceClaimInfos, fmt.Errorf("failed to list ComposabilityRequestList: %v", err)
+	resourceList := &cdioperator.ComposableResourceList{}
+	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
+		return resourceClaimInfos, fmt.Errorf("failed to list composableResourceList: %v", err)
 	}
 
 	sortByTime(resourceClaimInfos, "Ascending")
@@ -144,26 +144,24 @@ OuterLoop:
 		modelMap := getUniqueModelsWithCounts(rc)
 	MiddleLoop:
 		for model, count := range modelMap {
-			for _, request := range requestList.Items {
+			for _, resource := range resourceList.Items {
 				matchedCount := 0
-				if request.Spec.Resource.Model == model && request.Spec.Resource.TargetNode == rc.NodeName {
-					for name, resource := range request.Status.Resources {
-						if !resourceMatched[name] && resource.State == "Online" {
-							isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.DeviceIDUUID, resourceSliceInfos)
-							if isRed {
-								isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, *resourceSliceInfo)
-								if err != nil {
-									return resourceClaimInfos, err
-								}
-								if isUsed {
-									continue
-								}
-								if matchedCount < count {
-									resourceMatched[name] = true
-									matchedCount++
-								} else {
-									continue MiddleLoop
-								}
+				if resource.Spec.Model == model && resource.Spec.TargetNode == rc.NodeName {
+					if !resourceMatched[resource.Name] && resource.Status.State == "Online" {
+						isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.Status.CDIDeviceID, resourceSliceInfos)
+						if isRed {
+							isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.Status.CDIDeviceID, *resourceSliceInfo)
+							if err != nil {
+								return resourceClaimInfos, err
+							}
+							if isUsed {
+								continue
+							}
+							if matchedCount < count {
+								resourceMatched[resource.Name] = true
+								matchedCount++
+							} else {
+								continue MiddleLoop
 							}
 						}
 					}
@@ -178,7 +176,7 @@ OuterLoop:
 		}
 
 		currentTime := time.Now().Format(time.RFC3339)
-		for resourceName, _ := range resourceMatched {
+		for resourceName := range resourceMatched {
 			err = PatchComposableResourceAnnotation(ctx, kubeClient, resourceName, labelPrefix+"/last-used-time", currentTime)
 			if err != nil {
 				return resourceClaimInfos, err
