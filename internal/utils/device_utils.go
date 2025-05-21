@@ -12,10 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, model string, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
-	preparingDeviceCount := getPreparingDevicesCount(resourceClaimInfos, model)
+func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, model, nodeName string, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
+	preparingDeviceCount := getPreparingDevicesCount(resourceClaimInfos, model, nodeName)
 
-	podAllocatedDevicesCount, err := getPodAllocatedDevicesCount(ctx, kubeClient, model, resourceSliceInfos)
+	podAllocatedDevicesCount, err := getPodAllocatedDevicesCount(ctx, kubeClient, model, nodeName, resourceSliceInfos)
 	if err != nil {
 		return 0, err
 	}
@@ -23,10 +23,13 @@ func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, mod
 	return preparingDeviceCount + podAllocatedDevicesCount, nil
 }
 
-func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model string) int64 {
+func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
 	var count int64
 
 	for _, rc := range resourceClaimInfos {
+		if rc.NodeName != nodeName {
+			continue
+		}
 		for _, device := range rc.Devices {
 			if device.Model == model {
 				if device.State == "Preparing" {
@@ -39,27 +42,28 @@ func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, mode
 	return count
 }
 
-func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, model string, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
+func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, model, nodeName string, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
 	var count int64
 
-	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
-	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
-		return count, fmt.Errorf("failed to list composabilityRequestList: %v", err)
+	composableResourceList := &cdioperator.ComposableResourceList{}
+	if err := kubeClient.List(ctx, composableResourceList, &client.ListOptions{}); err != nil {
+		return count, fmt.Errorf("failed to list composableResourceList: %v", err)
 	}
 
-	for _, request := range composabilityRequestList.Items {
-		if request.Spec.Resource.Model == model {
-			for _, resource := range request.Status.Resources {
-				if resource.State == "Online" {
-					isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.DeviceIDUUID, resourceSliceInfos)
-					if isRed {
-						isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.DeviceIDUUID, *resourceSliceInfo)
-						if err != nil {
-							return count, err
-						}
-						if isUsed {
-							count++
-						}
+	for _, resource := range composableResourceList.Items {
+		if resource.Spec.TargetNode != nodeName {
+			continue
+		}
+		if resource.Spec.Model == model {
+			if resource.Status.State == "Online" {
+				isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
+				if isRed {
+					isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.Status.DeviceID, *resourceSliceInfo)
+					if err != nil {
+						return count, err
+					}
+					if isUsed {
+						count++
 					}
 				}
 			}
