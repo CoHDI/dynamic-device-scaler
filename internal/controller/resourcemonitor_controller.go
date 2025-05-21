@@ -152,7 +152,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 			return err
 		}
 
-		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
+		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 		if err != nil {
 			return err
 		}
@@ -178,15 +178,22 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 	}
 
 	var actualCount int64
-	var exit bool
+	var requestExit bool
 	for _, device := range composableDRASpec.DeviceInfos {
+		requestExit = false
+
 		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, nodeInfo.Name, resourceClaimInfos, resourceSliceInfos)
 		if err != nil {
 			return err
 		}
-		exit = false
+
+		_, minCountLimit := utils.GetModelLimit(nodeInfo, device.CDIModelName)
+		if cofiguredDeviceCount < minCountLimit {
+			cofiguredDeviceCount = minCountLimit
+		}
+
 		for _, cr := range composabilityRequestList.Items {
-			if cr.Spec.Resource.Model == device.CDIModelName {
+			if cr.Spec.Resource.Model == device.CDIModelName && cr.Spec.Resource.TargetNode == nodeInfo.Name {
 				actualCount = cr.Spec.Resource.Size
 				if cofiguredDeviceCount > actualCount {
 					err := utils.DynamicAttach(ctx, r.Client, &cr, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
@@ -199,11 +206,12 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 						return err
 					}
 				}
-				exit = true
+				requestExit = true
 				break
 			}
 		}
-		if !exit && cofiguredDeviceCount > 0 {
+
+		if !requestExit && cofiguredDeviceCount > 0 {
 			err := utils.DynamicAttach(ctx, r.Client, nil, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
 			if err != nil {
 				return err

@@ -96,7 +96,7 @@ outerLoop:
 			if err != nil {
 				return resourceClaimInfos, err
 			}
-			maxDevice, _ := getModelLimit(node, model)
+			maxDevice, _ := GetModelLimit(node, model)
 
 			if cofiguredDeviceCount > maxDevice {
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
@@ -110,7 +110,7 @@ outerLoop:
 	return resourceClaimInfos, nil
 }
 
-func getModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
+func GetModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
 	for _, modelConstraint := range node.Models {
 		if modelConstraint.Model == model {
 			max = int64(modelConstraint.MaxDevice)
@@ -121,7 +121,7 @@ func getModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
 	return
 }
 
-func RescheduleNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string, deviceNoAllocation time.Duration) ([]types.ResourceClaimInfo, error) {
+func RescheduleNotification(ctx context.Context, kubeClient client.Client, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string, deviceNoAllocation time.Duration) ([]types.ResourceClaimInfo, error) {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, fmt.Errorf("failed to list composableResourceList: %v", err)
@@ -137,8 +137,8 @@ OuterLoop:
 		modelMap := getUniqueModelsWithCounts(rc)
 	MiddleLoop:
 		for model, count := range modelMap {
+			matchedCount := 0
 			for _, resource := range resourceList.Items {
-				matchedCount := 0
 				if resource.Spec.Model == model && resource.Spec.TargetNode == rc.NodeName {
 					if !resourceMatched[resource.Name] && resource.Status.State == "Online" {
 						isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.Status.CDIDeviceID, resourceSliceInfos)
@@ -150,10 +150,19 @@ OuterLoop:
 							if isUsed {
 								continue
 							}
-							if matchedCount < count {
-								resourceMatched[resource.Name] = true
-								matchedCount++
-							} else {
+
+							isOvertime, err := isLastUsedOverTime(resource, labelPrefix, deviceNoAllocation)
+							if err != nil {
+								return resourceClaimInfos, err
+							}
+							if !isOvertime {
+								continue
+							}
+
+							resourceMatched[resource.Name] = true
+							matchedCount++
+
+							if matchedCount >= count {
 								continue MiddleLoop
 							}
 						}
@@ -230,10 +239,8 @@ func isDeviceCoexistence(model1, model2 string, composableDRASpec types.Composab
 }
 
 func setDevicesState(ctx context.Context, kubeClient client.Client, resourceClaimInfo types.ResourceClaimInfo, targetState string, conditionType string) (types.ResourceClaimInfo, error) {
-	for k, device := range resourceClaimInfo.Devices {
-		if device.State == "Preparing" {
-			resourceClaimInfo.Devices[k].State = targetState
-		}
+	for k := range resourceClaimInfo.Devices {
+		resourceClaimInfo.Devices[k].State = targetState
 	}
 
 	namespacedName := k8stypes.NamespacedName{
