@@ -152,7 +152,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 			return err
 		}
 
-		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
+		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 		if err != nil {
 			return err
 		}
