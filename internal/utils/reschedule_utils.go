@@ -42,11 +42,24 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 
 outerLoop:
 	for k, rc := range resourceClaimInfos {
-		if rc.NodeName == node.Name {
-			for i, rcDevice := range rc.Devices {
-				for j, otherDevice := range rc.Devices {
-					if i != j && rcDevice.Model != otherDevice.Model {
-						if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model, composableDRASpec) {
+		for i, rcDevice := range rc.Devices {
+			for j, otherDevice := range rc.Devices {
+				if i != j && rcDevice.Model != otherDevice.Model {
+					if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model, composableDRASpec) {
+						resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+						if err != nil {
+							return resourceClaimInfos, err
+						}
+						continue outerLoop
+					}
+				}
+			}
+
+			if rcDevice.State == "Preparing" {
+				for _, composabilityRequest := range composabilityRequestList.Items {
+					if composabilityRequest.Spec.Resource.Size > 0 &&
+						composabilityRequest.Spec.Resource.TargetNode == rc.NodeName {
+						if !isDeviceCoexistence(rcDevice.Model, composabilityRequest.Spec.Resource.Model, composableDRASpec) {
 							resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 							if err != nil {
 								return resourceClaimInfos, err
@@ -56,54 +69,39 @@ outerLoop:
 					}
 				}
 
-				if rcDevice.State == "Preparing" {
-					for _, composabilityRequest := range composabilityRequestList.Items {
-						if composabilityRequest.Spec.Resource.Size > 0 &&
-							composabilityRequest.Spec.Resource.TargetNode == rc.NodeName {
-							if !isDeviceCoexistence(rcDevice.Model, composabilityRequest.Spec.Resource.Model, composableDRASpec) {
-								resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-								if err != nil {
-									return resourceClaimInfos, err
-								}
-								continue outerLoop
-							}
-						}
-					}
-
-					for i, rc2 := range resourceClaimInfos {
-						if rc.Name != rc2.Name {
-							for _, rc2Device := range rc2.Devices {
-								if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
-									if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
-										resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-										if err != nil {
-											return resourceClaimInfos, err
-										}
-										resourceClaimInfos[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
-										if err != nil {
-											return resourceClaimInfos, err
-										}
-										continue outerLoop
+				for i, rc2 := range resourceClaimInfos {
+					if rc.Name != rc2.Name {
+						for _, rc2Device := range rc2.Devices {
+							if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
+								if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
+									resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+									if err != nil {
+										return resourceClaimInfos, err
 									}
+									resourceClaimInfos[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
+									if err != nil {
+										return resourceClaimInfos, err
+									}
+									continue outerLoop
 								}
 							}
 						}
 					}
 				}
 			}
-			modelMap := getUniqueModelsWithCounts(rc)
-			for model := range modelMap {
-				cofiguredDeviceCount, err := GetConfiguredDeviceCount(ctx, kubeClient, model, node.Name, resourceClaimInfos, resourceSliceInfos)
+		}
+		modelMap := getUniqueModelsWithCounts(rc)
+		for model := range modelMap {
+			cofiguredDeviceCount, err := GetConfiguredDeviceCount(ctx, kubeClient, model, node.Name, resourceClaimInfos, resourceSliceInfos)
+			if err != nil {
+				return resourceClaimInfos, err
+			}
+			maxDevice, _ := getModelLimit(node, model)
+
+			if cofiguredDeviceCount > maxDevice {
+				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 				if err != nil {
 					return resourceClaimInfos, err
-				}
-				maxDevice, _ := getModelLimit(node, model)
-
-				if cofiguredDeviceCount > maxDevice {
-					resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-					if err != nil {
-						return resourceClaimInfos, err
-					}
 				}
 			}
 		}

@@ -140,17 +140,24 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
 	var err error
 	for _, nodeInfo := range nodeInfos {
-		resourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec)
+		var nodeResourceClaimInfos []types.ResourceClaimInfo
+		for _, resourceClaimInfo := range resourceClaimInfos {
+			if resourceClaimInfo.NodeName == nodeInfo.Name {
+				nodeResourceClaimInfos = append(nodeResourceClaimInfos, resourceClaimInfo)
+			}
+		}
+
+		nodeResourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
 			return err
 		}
 
-		resourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
+		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 		if err != nil {
 			return err
 		}
 
-		err = r.handleDevices(ctx, nodeInfo, resourceClaimInfos, resourceSliceInfos, composableDRASpec)
+		err = r.handleDevices(ctx, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
 			return err
 		}
