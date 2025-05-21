@@ -173,7 +173,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 	var actualCount int64
 	var exit bool
 	for _, device := range composableDRASpec.DeviceInfos {
-		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, resourceClaimInfos, resourceSliceInfos)
+		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, nodeInfo.Name, resourceClaimInfos, resourceSliceInfos)
 		if err != nil {
 			return err
 		}
