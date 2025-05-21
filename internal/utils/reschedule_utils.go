@@ -96,7 +96,7 @@ outerLoop:
 			if err != nil {
 				return resourceClaimInfos, err
 			}
-			maxDevice, _ := getModelLimit(node, model)
+			maxDevice, _ := GetModelLimit(node, model)
 
 			if cofiguredDeviceCount > maxDevice {
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
@@ -110,7 +110,7 @@ outerLoop:
 	return resourceClaimInfos, nil
 }
 
-func getModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
+func GetModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
 	for _, modelConstraint := range node.Models {
 		if modelConstraint.Model == model {
 			max = int64(modelConstraint.MaxDevice)
