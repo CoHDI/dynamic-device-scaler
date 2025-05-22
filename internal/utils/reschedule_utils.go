@@ -13,7 +13,6 @@ import (
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -292,87 +291,6 @@ func setDevicesState(ctx context.Context, kubeClient client.Client, resourceClai
 	}
 
 	return resourceClaimInfo, nil
-}
-
-func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet kubernetes.Interface, nodeInfo types.NodeInfo) error {
-	var devices []string
-
-	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
-	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
-		return fmt.Errorf("failed to list composabilityRequestList: %v", err)
-	}
-
-	for _, cr := range composabilityRequestList.Items {
-		if cr.Spec.Resource.TargetNode == nodeInfo.Name {
-			if cr.Spec.Resource.Size > 0 {
-				if notIn(cr.Spec.Resource.Model, devices) {
-					devices = append(devices, cr.Spec.Resource.Model)
-				}
-			}
-		}
-	}
-
-	resourceList := &cdioperator.ComposableResourceList{}
-	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
-		return fmt.Errorf("failed to list ComposableResourceList: %v", err)
-	}
-
-	for _, rs := range resourceList.Items {
-		if rs.Spec.TargetNode == nodeInfo.Name {
-			if rs.Status.State == "Online" {
-				if notIn(rs.Spec.Model, devices) {
-					devices = append(devices, rs.Spec.Model)
-				}
-			}
-		}
-	}
-
-	var addLabels, deleteLabels []string
-	var notCoexistID []int
-
-	composableDRASpec, err := GetConfigMapInfo(ctx, clientSet)
-	if err != nil {
-		return err
-	}
-
-	for _, device := range devices {
-		for _, deviceInfo := range composableDRASpec.DeviceInfos {
-			if device == deviceInfo.CDIModelName {
-				notCoexistID = append(notCoexistID, deviceInfo.CannotCoexistWith...)
-			}
-		}
-	}
-
-	for _, deviceInfo := range composableDRASpec.DeviceInfos {
-		if notIn(deviceInfo.Index, notCoexistID) {
-			label := composableDRASpec.LabelPrefix + "/" + deviceInfo.K8sDeviceName
-			addLabels = append(addLabels, label)
-		} else {
-			label := composableDRASpec.LabelPrefix + "/" + deviceInfo.K8sDeviceName
-			deleteLabels = append(deleteLabels, label)
-		}
-	}
-
-	node, err := clientSet.CoreV1().Nodes().Get(ctx, nodeInfo.Name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get node: %v", err)
-	}
-
-	updateNode := node.DeepCopy()
-	if updateNode.Labels == nil {
-		updateNode.Labels = make(map[string]string)
-	}
-	for _, label := range addLabels {
-		updateNode.Labels[label] = "true"
-	}
-	for _, label := range deleteLabels {
-		delete(updateNode.Labels, label)
-	}
-	if _, err = clientSet.CoreV1().Nodes().Update(ctx, updateNode, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update node labels: %v", err)
-	}
-
-	return nil
 }
 
 func notIn[T comparable](target T, slice []T) bool {
