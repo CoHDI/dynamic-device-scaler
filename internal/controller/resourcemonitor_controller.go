@@ -201,7 +201,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 						return err
 					}
 				} else if cofiguredDeviceCount < actualCount {
-					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
+					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount, nodeInfo.Name, composableDRASpec.LabelPrefix, r.DeviceNoRemoval)
 					if err != nil {
 						return err
 					}
