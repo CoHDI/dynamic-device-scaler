@@ -162,7 +162,7 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 			return err
 		}
 
-		err = utils.UpdateNodeLabel(ctx, r.Client, r.ClientSet, nodeInfo)
+		err = utils.UpdateNodeLabel(ctx, r.Client, r.ClientSet, nodeInfo.Name, composableDRASpec)
 		if err != nil {
 			return err
 		}

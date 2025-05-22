@@ -6,23 +6,30 @@ import (
 	"fmt"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
+	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const maxRetries = 2
 
-func PatchNodeLabel(clientset kubernetes.Interface, nodeName string, key, value string) error {
+func patchNodeLabel(clientset kubernetes.Interface, nodeName string, addLabels, deleteLabels []string) error {
 	var lastErr error
+
+	labelsPatch := make(map[string]interface{})
+	for _, label := range addLabels {
+		labelsPatch[label] = "true"
+	}
+	for _, label := range deleteLabels {
+		labelsPatch[label] = nil
+	}
 
 	patchBody := map[string]any{
 		"metadata": map[string]any{
-			"labels": map[string]string{
-				key: value,
-			},
+			"labels": labelsPatch,
 		},
 	}
 
@@ -35,7 +42,7 @@ func PatchNodeLabel(clientset kubernetes.Interface, nodeName string, key, value 
 		_, err = clientset.CoreV1().Nodes().Patch(
 			context.TODO(),
 			nodeName,
-			types.StrategicMergePatchType,
+			k8stypes.StrategicMergePatchType,
 			patchBytes,
 			metav1.PatchOptions{},
 		)
@@ -70,7 +77,7 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 		currentCR := &cdioperator.ComposableResource{}
 		if err := kubeClient.Get(
 			ctx,
-			types.NamespacedName{Name: resourceName},
+			k8stypes.NamespacedName{Name: resourceName},
 			currentCR,
 		); err != nil {
 			return fmt.Errorf("failed to get latest ComposableResource: %w", err)
@@ -89,7 +96,7 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 					Name: resourceName,
 				},
 			},
-			client.RawPatch(types.StrategicMergePatchType, patchBytes),
+			client.RawPatch(k8stypes.StrategicMergePatchType, patchBytes),
 		)
 
 		if err == nil {
@@ -113,7 +120,7 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 		existingCR := &cdioperator.ComposabilityRequest{}
 		err := kubeClient.Get(
 			ctx,
-			types.NamespacedName{Name: cr.Name},
+			k8stypes.NamespacedName{Name: cr.Name},
 			existingCR,
 		)
 		if err != nil {
@@ -134,4 +141,61 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 		return nil
 	}
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
+}
+
+func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet kubernetes.Interface, nodeName string, composableDRASpec types.ComposableDRASpec) error {
+	var installedDevices []string
+
+	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
+	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
+		return fmt.Errorf("failed to list composabilityRequestList: %v", err)
+	}
+
+	for _, cr := range composabilityRequestList.Items {
+		if cr.Spec.Resource.TargetNode == nodeName {
+			if cr.Spec.Resource.Size > 0 {
+				if notIn(cr.Spec.Resource.Model, installedDevices) {
+					installedDevices = append(installedDevices, cr.Spec.Resource.Model)
+				}
+			}
+		}
+	}
+
+	resourceList := &cdioperator.ComposableResourceList{}
+	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
+		return fmt.Errorf("failed to list ComposableResourceList: %v", err)
+	}
+
+	for _, rs := range resourceList.Items {
+		if rs.Spec.TargetNode == nodeName {
+			if rs.Status.State == "Online" {
+				if notIn(rs.Spec.Model, installedDevices) {
+					installedDevices = append(installedDevices, rs.Spec.Model)
+				}
+			}
+		}
+	}
+
+	var addLabels, deleteLabels []string
+	var notCoexistID []int
+
+	for _, device := range installedDevices {
+		for _, deviceInfo := range composableDRASpec.DeviceInfos {
+			if device == deviceInfo.CDIModelName {
+				notCoexistID = append(notCoexistID, deviceInfo.CannotCoexistWith...)
+			}
+		}
+	}
+
+	for _, deviceInfo := range composableDRASpec.DeviceInfos {
+		if notIn(deviceInfo.Index, notCoexistID) {
+			label := composableDRASpec.LabelPrefix + "/" + deviceInfo.K8sDeviceName
+			addLabels = append(addLabels, label)
+		} else {
+			label := composableDRASpec.LabelPrefix + "/" + deviceInfo.K8sDeviceName
+			deleteLabels = append(deleteLabels, label)
+		}
+	}
+
+	return patchNodeLabel(clientSet, nodeName, addLabels, deleteLabels)
 }
