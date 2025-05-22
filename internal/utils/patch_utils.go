@@ -113,7 +113,7 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 		existingCR := &cdioperator.ComposabilityRequest{}
 		err := kubeClient.Get(
 			ctx,
-			types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace},
+			types.NamespacedName{Name: cr.Name},
 			existingCR,
 		)
 		if err != nil {
