@@ -104,7 +104,7 @@ func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.Resour
 	for _, resourceSlice := range resourceSliceInfos {
 		for _, resourceSliceDevice := range resourceSlice.Devices {
 			if resourceSliceDevice.UUID == deviceID {
-				return resourceSlice.State == types.ResourceSliceStateRed, &resourceSlice
+				return true, &resourceSlice
 			}
 		}
 	}
