@@ -99,25 +99,8 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 
 		//TODO: wait for KEP5007
 		// if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {
-		// 	resourceSliceInfo.State = types.ResourceSliceStateGreen
-		// } else {
-		// 	resourceSliceInfo.State = types.ResourceSliceStateRed
+		// 	continue
 		// }
-
-		if resourceSliceInfo.State == types.ResourceSliceStateGreen {
-			if rs.Spec.NodeSelector != nil {
-				for _, term := range rs.Spec.NodeSelector.NodeSelectorTerms {
-					for _, expr := range term.MatchExpressions {
-						switch expr.Key {
-						case "fabric":
-							if len(expr.Values) > 0 {
-								resourceSliceInfo.FabricID = expr.Values[0]
-							}
-						}
-					}
-				}
-			}
-		}
 
 		for _, device := range rs.Spec.Devices {
 			if device.Basic != nil {
