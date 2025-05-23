@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -92,13 +93,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	scanInterval, err := getEnvAsInt("SCAN_INTERVAL", 60)
+	if err != nil {
+		setupLog.Error(err, "invalid SCAN_INTERVAL")
+		os.Exit(1)
+	}
+
+	deviceNoRemoval, err := getEnvAsInt("DEVICE_NO_REMOVAL_DURATION", 600)
+	if err != nil {
+		setupLog.Error(err, "invalid DEVICE_NO_REMOVAL_DURATION")
+		os.Exit(1)
+	}
+
+	deviceNoAllocation, err := getEnvAsInt("DEVICE_NO_ALLOCATION_DURATION", 60)
+	if err != nil {
+		setupLog.Error(err, "invalid DEVICE_NO_ALLOCATION_DURATION")
+		os.Exit(1)
+	}
+
 	if err = (&controller.ResourceMonitorReconciler{
 		Client:             mgr.GetClient(),
 		ClientSet:          clientSet,
 		Scheme:             mgr.GetScheme(),
-		ScanInterval:       time.Duration(getEnvAsInt("SCAN_INTERVAL", 60)) * time.Second,
-		DeviceNoRemoval:    time.Duration(getEnvAsInt("DEVICE_NO_REMOVAL_DURATION", 600)) * time.Second,
-		DeviceNoAllocation: time.Duration(getEnvAsInt("DEVICE_NO_ALLOCATION_DURATION", 60)) * time.Second,
+		ScanInterval:       time.Duration(scanInterval) * time.Second,
+		DeviceNoRemoval:    time.Duration(deviceNoRemoval) * time.Second,
+		DeviceNoAllocation: time.Duration(deviceNoAllocation) * time.Second,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceMonitor")
 		os.Exit(1)
@@ -121,14 +140,20 @@ func main() {
 	}
 }
 
-func getEnvAsInt(name string, defaultValue int) int {
+func getEnvAsInt(name string, defaultValue int) (int, error) {
 	valueStr := os.Getenv(name)
 	if valueStr == "" {
-		return defaultValue
+		return defaultValue, nil
 	}
+
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
-		return defaultValue
+		return 0, fmt.Errorf("invalid integer value for %s: %v", name, err)
 	}
-	return value
+
+	if value < 0 || value > 86400 {
+		return 0, fmt.Errorf("%s must be between 0-86400, got %d", name, value)
+	}
+
+	return value, nil
 }
