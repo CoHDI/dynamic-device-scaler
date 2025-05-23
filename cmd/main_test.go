@@ -2,57 +2,77 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
 func TestGetEnvAsInt(t *testing.T) {
 	tests := []struct {
-		name       string
-		setEnv     bool
-		envValue   string
-		defaultVal int
-		expected   int
+		name        string
+		setEnv      bool
+		envValue    string
+		defaultVal  int
+		wantValue   int
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:       "Valid environment value",
 			setEnv:     true,
 			envValue:   "300",
 			defaultVal: 500,
-			expected:   300,
+			wantValue:  300,
+			wantErr:    false,
 		},
 		{
-			name:       "Invalid environment value (non-integer)",
-			setEnv:     true,
-			envValue:   "abc",
-			defaultVal: 500,
-			expected:   500,
+			name:        "Invalid environment value (non-integer)",
+			setEnv:      true,
+			envValue:    "abc",
+			defaultVal:  500,
+			wantValue:   0,
+			wantErr:     true,
+			errContains: "invalid integer value",
 		},
 		{
 			name:       "Empty environment value",
 			setEnv:     true,
 			envValue:   "",
 			defaultVal: 500,
-			expected:   500,
+			wantValue:  500,
+			wantErr:    false,
 		},
 		{
 			name:       "Environment variable not set",
 			setEnv:     false,
 			defaultVal: 500,
-			expected:   500,
+			wantValue:  500,
+			wantErr:    false,
 		},
 		{
-			name:       "Zero value",
+			name:       "Zero value (valid)",
 			setEnv:     true,
 			envValue:   "0",
 			defaultVal: 500,
-			expected:   0,
+			wantValue:  0,
+			wantErr:    false,
 		},
 		{
-			name:       "Negative value",
-			setEnv:     true,
-			envValue:   "-100",
-			defaultVal: 500,
-			expected:   -100,
+			name:        "Negative value (out of range)",
+			setEnv:      true,
+			envValue:    "-100",
+			defaultVal:  500,
+			wantValue:   0,
+			wantErr:     true,
+			errContains: "must be between 0-86400",
+		},
+		{
+			name:        "Value exceeds 86400",
+			setEnv:      true,
+			envValue:    "86401",
+			defaultVal:  500,
+			wantValue:   0,
+			wantErr:     true,
+			errContains: "must be between 0-86400",
 		},
 	}
 
@@ -66,11 +86,26 @@ func TestGetEnvAsInt(t *testing.T) {
 				os.Unsetenv(envVarName)
 			}
 
-			actual := getEnvAsInt(envVarName, tt.defaultVal)
+			gotValue, err := getEnvAsInt(envVarName, tt.defaultVal)
 
-			if actual != tt.expected {
-				t.Errorf("expected %d, got %d (env=%q, default=%d)",
-					tt.expected, actual, tt.envValue, tt.defaultVal)
+			if gotValue != tt.wantValue {
+				t.Errorf("value mismatch: want %d, got %d (env=%q, default=%d)",
+					tt.wantValue, gotValue, tt.envValue, tt.defaultVal)
+			}
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error presence mismatch: wantErr=%t, gotErr=%v (env=%q)",
+					tt.wantErr, err, tt.envValue)
+			}
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error message check failed: want contains %q, got %q",
+						tt.errContains, err.Error())
+				}
 			}
 		})
 	}
