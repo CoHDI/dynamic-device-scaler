@@ -112,22 +112,22 @@ func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.Resour
 	return false, nil
 }
 
-func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, model, nodeName string) error {
+func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, resourceType, model, nodeName string) error {
 	if cr == nil {
-		return createNewComposabilityRequestCR(ctx, kubeClient, count, model, nodeName)
+		return createNewComposabilityRequestCR(ctx, kubeClient, count, resourceType, model, nodeName)
 	}
 
 	return PatchComposabilityRequestSize(ctx, kubeClient, cr, count)
 }
 
-func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, model, node string) error {
+func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, resourceType, model, node string) error {
 	newCR := &cdioperator.ComposabilityRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "composability-",
 		},
 		Spec: cdioperator.ComposabilityRequestSpec{
 			Resource: cdioperator.ScalarResourceDetails{
-				Type:       "gpu",
+				Type:       resourceType,
 				Model:      model,
 				Size:       count,
 				TargetNode: node,
@@ -181,4 +181,13 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nod
 	}
 
 	return resourceCount, nil
+}
+
+func GetDriverType(model string) string {
+	switch model {
+	case "gpu.nvidia.com":
+		return "gpu"
+	default:
+		return ""
+	}
 }

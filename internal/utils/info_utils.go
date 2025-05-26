@@ -50,8 +50,8 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 			ResourceSliceLoop:
 				for _, rs := range resourceSliceList.Items {
 					if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
-						for _, device := range rs.Spec.Devices {
-							if device.Name == deviceInfo.Name {
+						for _, resourceSliceDevice := range rs.Spec.Devices {
+							if resourceSliceDevice.Name == device.Device {
 								resourceClaimInfo.NodeName = rs.Spec.NodeName
 								resourceClaimInfo.ResourceSliceName = rs.Name
 								break ResourceSliceLoop
@@ -137,11 +137,6 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 		var nodeInfo types.NodeInfo
 
 		nodeInfo.Name = node.Name
-
-		fabricIDValue, exists := node.Labels[composableDRASpec.LabelPrefix+"/fabric"]
-		if exists {
-			nodeInfo.FabricID = fabricIDValue
-		}
 
 		labels := node.Labels
 		for key, val := range labels {

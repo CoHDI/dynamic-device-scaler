@@ -1,9 +1,8 @@
 package types
 
 type NodeInfo struct {
-	Name     string             `json:"name"`
-	FabricID string             `json:"fabric_id"`
-	Models   []ModelConstraints `json:"models"`
+	Name   string             `json:"name"`
+	Models []ModelConstraints `json:"models"`
 }
 
 type ModelConstraints struct {
