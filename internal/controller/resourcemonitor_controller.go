@@ -196,7 +196,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 			if cr.Spec.Resource.Model == device.CDIModelName && cr.Spec.Resource.TargetNode == nodeInfo.Name {
 				actualCount = cr.Spec.Resource.Size
 				if cofiguredDeviceCount > actualCount {
-					err := utils.DynamicAttach(ctx, r.Client, &cr, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
+					err := utils.DynamicAttach(ctx, r.Client, &cr, cofiguredDeviceCount, cr.Spec.Resource.Type, device.CDIModelName, nodeInfo.Name)
 					if err != nil {
 						return err
 					}
@@ -212,7 +212,8 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 		}
 
 		if !requestExit && cofiguredDeviceCount > 0 {
-			err := utils.DynamicAttach(ctx, r.Client, nil, cofiguredDeviceCount, device.CDIModelName, nodeInfo.Name)
+			resourceType := utils.GetDriverType(device.DriverName)
+			err := utils.DynamicAttach(ctx, r.Client, nil, cofiguredDeviceCount, resourceType, device.CDIModelName, nodeInfo.Name)
 			if err != nil {
 				return err
 			}
