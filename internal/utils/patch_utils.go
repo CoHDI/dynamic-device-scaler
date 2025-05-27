@@ -91,7 +91,7 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 
 		err := kubeClient.Patch(
 			ctx,
-			&cdioperator.ComposabilityRequest{
+			&cdioperator.ComposableResource{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: resourceName,
 				},

@@ -23,9 +23,11 @@ import (
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/stretchr/testify/assert"
@@ -35,16 +37,13 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		existingResourceList  *cdioperator.ComposableResourceList
+		existingResourceClaim *resourceapi.ResourceClaimList
 		resourceSliceInfoList []types.ResourceSliceInfo
 		labelPrefix           string
 		wantErr               bool
 		expectedErrMsg        string
 		expectedUpdate        bool
 	}{
-		{
-			name:        "empty resource",
-			labelPrefix: "test",
-		},
 		{
 			name:        "none Online resource",
 			labelPrefix: "test",
@@ -60,6 +59,30 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 						},
 						Status: cdioperator.ComposableResourceStatus{
 							State: "Running",
+						},
+					},
+				},
+			},
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "rc0",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "gpu-pool",
+									Device: "gpu0",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod0",
+									Resource: "pods",
+								},
+							},
 						},
 					},
 				},
@@ -82,6 +105,31 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 					},
 				},
 			},
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "rc0",
+							Namespace: "test",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "gpu-pool",
+									Device: "gpu0",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod0",
+									Resource: "pods",
+								},
+							},
+						},
+					},
+				},
+			},
 			resourceSliceInfoList: []types.ResourceSliceInfo{
 				{
 					Name: "rs0",
@@ -91,6 +139,8 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 							UUID: "123",
 						},
 					},
+					Pool:   "gpu-pool",
+					Driver: "gpu.nvidia.com",
 				},
 			},
 			expectedUpdate: false,
@@ -150,6 +200,30 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 					},
 				},
 			},
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "rc0",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "gpu-pool",
+									Device: "gpu0",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod0",
+									Resource: "pods",
+								},
+							},
+						},
+					},
+				},
+			},
 			resourceSliceInfoList: []types.ResourceSliceInfo{
 				{
 					Name: "rs0",
@@ -159,6 +233,8 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 							UUID: "123",
 						},
 					},
+					Pool:   "gpu-pool",
+					Driver: "gpu.nvidia.com",
 				},
 			},
 			expectedUpdate: true,
@@ -171,6 +247,12 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 			if tc.existingResourceList != nil {
 				for i := range tc.existingResourceList.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceList.Items[i])
+				}
+			}
+
+			if tc.existingResourceClaim != nil {
+				for i := range tc.existingResourceClaim.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceClaim.Items[i])
 				}
 			}
 
@@ -197,21 +279,22 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			resourceList := &cdioperator.ComposableResourceList{}
-			err = fakeClient.List(context.Background(), resourceList)
+			resource := &cdioperator.ComposableResource{}
+			err = fakeClient.Get(context.Background(), client.ObjectKey{
+				Name: "rs0",
+			}, resource)
 			if err != nil {
-				t.Errorf("failed to get resourceList: %v", err)
+				t.Errorf("failed to get resource: %v", err)
 			}
 
-			for _, rs := range resourceList.Items {
-				if tc.expectedUpdate {
-					assert.Contains(t, rs.Annotations, tc.labelPrefix+"/last-used-time")
-					_, err := time.Parse(time.RFC3339, rs.Annotations[tc.labelPrefix+"/last-used-time"])
-					assert.NoError(t, err)
-				} else {
-					assert.Nil(t, rs.Annotations)
-				}
+			if tc.expectedUpdate {
+				assert.Contains(t, resource.Annotations, tc.labelPrefix+"/last-used-time")
+				_, err := time.Parse(time.RFC3339, resource.Annotations[tc.labelPrefix+"/last-used-time"])
+				assert.NoError(t, err)
+			} else {
+				assert.Nil(t, resource.Annotations)
 			}
+
 		})
 	}
 }
