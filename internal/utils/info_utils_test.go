@@ -24,6 +24,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 	testCases := []struct {
 		name                      string
 		existingResourceClaimList *resourceapi.ResourceClaimList
+		existingResourceSliceList *resourceapi.ResourceSliceList
 		expectedResourceClaimInfo []types.ResourceClaimInfo
 		wantErr                   bool
 		expectedErrMsg            string
@@ -64,12 +65,14 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							},
 							Devices: []resourceapi.AllocatedDeviceStatus{
 								{
-									Driver: "gpu-1",
-									Device: "gpu.nvidia.com",
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-1",
+									Pool:   "test-pool",
 								},
 								{
-									Driver: "gpu-2",
-									Device: "gpu.nvidia.com",
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-2",
+									Pool:   "test-pool",
 								},
 							},
 						},
@@ -90,8 +93,9 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							},
 							Devices: []resourceapi.AllocatedDeviceStatus{
 								{
-									Driver: "gpu-1",
-									Device: "gpu.nvidia.com",
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-1",
+									Pool:   "test-pool",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceReschedule",
@@ -100,8 +104,9 @@ func TestGetResourceClaimInfo(t *testing.T) {
 									},
 								},
 								{
-									Driver: "gpu-2",
-									Device: "gpu.nvidia.com",
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-2",
+									Pool:   "test-pool",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceFailed",
@@ -110,8 +115,9 @@ func TestGetResourceClaimInfo(t *testing.T) {
 									},
 								},
 								{
-									Driver: "gpu-3",
-									Device: "gpu.nvidia.com",
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-3",
+									Pool:   "test-pool",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "test-condition",
@@ -124,10 +130,47 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					},
 				},
 			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid": {StringValue: ptr.To("1234")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid": {StringValue: ptr.To("5678")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
 			expectedResourceClaimInfo: []types.ResourceClaimInfo{
 				{
 					Name:              "test-claim-1",
 					Namespace:         "default",
+					NodeName:          "node1",
+					ResourceSliceName: "test-resourceslice-1",
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
@@ -141,6 +184,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				{
 					Name:              "test-claim-2",
 					Namespace:         "default",
+					NodeName:          "node1",
+					ResourceSliceName: "test-resourceslice-1",
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
@@ -170,6 +215,12 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				}
 			}
 
+			if tc.existingResourceSliceList != nil {
+				for i := range tc.existingResourceSliceList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceSliceList.Items[i])
+				}
+			}
+
 			s := scheme.Scheme
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
@@ -186,7 +237,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(result, tc.expectedResourceClaimInfo) {
-				t.Errorf("Expected ResourceClaim info. Got: %v, Want: %v", result, tc.expectedResourceClaimInfo)
+				t.Errorf("Unexpected ResourceClaim info. Got: %v, Want: %v", result, tc.expectedResourceClaimInfo)
 			}
 		})
 	}
@@ -325,8 +376,7 @@ func TestGetNodeInfo(t *testing.T) {
 			},
 			expectedNodeInfos: []types.NodeInfo{
 				{
-					Name:     "node1",
-					FabricID: "123",
+					Name: "node1",
 					Models: []types.ModelConstraints{
 						{
 							Model:      "A100 80G",

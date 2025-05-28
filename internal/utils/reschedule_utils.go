@@ -10,9 +10,6 @@ import (
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
-	resourceapi "k8s.io/api/resource/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -192,7 +189,7 @@ func getUniqueModelsWithCounts(resourceClaimInfo types.ResourceClaimInfo) map[st
 	modelMap := make(map[string]int)
 
 	for _, device := range resourceClaimInfo.Devices {
-		if device.State == "Preaparing" {
+		if device.State == "Preparing" {
 			modelMap[device.Model]++
 		}
 	}
@@ -205,15 +202,20 @@ func isLastUsedOverTime(resource cdioperator.ComposableResource, labelPrefix str
 	if annotations == nil {
 		return false, fmt.Errorf("annotations not found")
 	}
+
+	var lastUsedTime time.Time
+	var err error
+
 	label := labelPrefix + "/last-used-time"
 	lastUsedStr, exists := annotations[label]
 	if !exists {
-		return false, fmt.Errorf("annotation %s not found", label)
-	}
+		lastUsedTime = resource.CreationTimestamp.Time
+	} else {
 
-	lastUsedTime, err := time.Parse(time.RFC3339, lastUsedStr)
-	if err != nil {
-		return false, fmt.Errorf("failed to parse time: %v", err)
+		lastUsedTime, err = time.Parse(time.RFC3339, lastUsedStr)
+		if err != nil {
+			return false, fmt.Errorf("failed to parse time: %v", err)
+		}
 	}
 
 	now := time.Now().UTC()
@@ -242,55 +244,7 @@ func setDevicesState(ctx context.Context, kubeClient client.Client, resourceClai
 		resourceClaimInfo.Devices[k].State = targetState
 	}
 
-	namespacedName := k8stypes.NamespacedName{
-		Name:      resourceClaimInfo.Name,
-		Namespace: resourceClaimInfo.Namespace,
-	}
-
-	var rc resourceapi.ResourceClaim
-
-	if err := kubeClient.Get(ctx, namespacedName, &rc); err != nil {
-		return resourceClaimInfo, fmt.Errorf("failed to get ResourceClaim: %v", err)
-	}
-
-	modified := false
-
-	for i := range rc.Status.Devices {
-		device := &rc.Status.Devices[i]
-
-		newCondition := metav1.Condition{
-			Type:               conditionType,
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.NewTime(time.Now()),
-		}
-
-		conditionExists := false
-		for j, existingCond := range device.Conditions {
-			if existingCond.Type == conditionType {
-				if existingCond.Status != newCondition.Status {
-					device.Conditions[j] = newCondition
-					modified = true
-				}
-				conditionExists = true
-				break
-			}
-		}
-
-		if !conditionExists {
-			device.Conditions = append(device.Conditions, newCondition)
-			modified = true
-		}
-	}
-
-	if !modified {
-		return resourceClaimInfo, nil
-	}
-
-	if err := kubeClient.Status().Update(ctx, &rc); err != nil {
-		return resourceClaimInfo, fmt.Errorf("failed to update ResourceClaim: %v", err)
-	}
-
-	return resourceClaimInfo, nil
+	return resourceClaimInfo, PatchResourceClaimDeviceConditions(ctx, kubeClient, resourceClaimInfo.Name, resourceClaimInfo.Namespace, conditionType)
 }
 
 func notIn[T comparable](target T, slice []T) bool {

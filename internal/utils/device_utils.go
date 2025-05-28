@@ -31,10 +31,8 @@ func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, mode
 			continue
 		}
 		for _, device := range rc.Devices {
-			if device.Model == model {
-				if device.State == "Preparing" {
-					count++
-				}
+			if device.Model == model && device.State == "Preparing" {
+				count++
 			}
 		}
 	}
@@ -117,7 +115,7 @@ func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 		return createNewComposabilityRequestCR(ctx, kubeClient, count, resourceType, model, nodeName)
 	}
 
-	return PatchComposabilityRequestSize(ctx, kubeClient, cr, count)
+	return PatchComposabilityRequestSize(ctx, kubeClient, cr.Name, count)
 }
 
 func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, resourceType, model, node string) error {
@@ -149,7 +147,7 @@ func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 	}
 
 	if nextSize < cr.Spec.Resource.Size {
-		return PatchComposabilityRequestSize(ctx, kubeClient, cr, nextSize)
+		return PatchComposabilityRequestSize(ctx, kubeClient, cr.Name, nextSize)
 	}
 
 	return nil
@@ -164,7 +162,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nod
 	var resourceCount int64
 	for _, resource := range resourceList.Items {
 		if (resource.Status.State == "Online" || resource.Status.State == "Attaching") &&
-			resource.Spec.TargetNode == nodeName && resource.DeletionTimestamp != nil {
+			resource.Spec.TargetNode == nodeName && resource.DeletionTimestamp == nil {
 			over, err := isLastUsedOverTime(resource, labelPrefix, deviceNoRemoval)
 			if err != nil {
 				return 0, err
