@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -113,14 +115,14 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
 }
 
-func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64) error {
+func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client, requestName string, count int64) error {
 	var lastErr error
 
 	for range maxRetries {
 		existingCR := &cdioperator.ComposabilityRequest{}
 		err := kubeClient.Get(
 			ctx,
-			k8stypes.NamespacedName{Name: cr.Name},
+			k8stypes.NamespacedName{Name: requestName},
 			existingCR,
 		)
 		if err != nil {
@@ -137,6 +139,60 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 				continue
 			}
 			return fmt.Errorf("failed to patch ComposabilityRequest: %v", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
+}
+
+func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.Client, name, namespace, conditionType string) error {
+	var lastErr error
+
+	for range maxRetries {
+		existingRC := &resourceapi.ResourceClaim{}
+		err := kubeClient.Get(
+			ctx,
+			k8stypes.NamespacedName{Name: name, Namespace: namespace},
+			existingRC,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to get ResourceClaim: %v", err)
+		}
+
+		modifiedRC := existingRC.DeepCopy()
+
+		for i := range modifiedRC.Status.Devices {
+			device := &modifiedRC.Status.Devices[i]
+
+			newCondition := metav1.Condition{
+				Type:               conditionType,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(time.Now()),
+			}
+
+			conditionExists := false
+			for j, existingCond := range device.Conditions {
+				if existingCond.Type == conditionType {
+					if existingCond.Status != newCondition.Status {
+						device.Conditions[j] = newCondition
+					}
+					conditionExists = true
+					break
+				}
+			}
+
+			if !conditionExists {
+				device.Conditions = append(device.Conditions, newCondition)
+			}
+		}
+
+		patch := client.StrategicMergeFrom(existingRC.DeepCopy())
+		if err := kubeClient.Patch(ctx, modifiedRC, patch); err != nil {
+			if apierrors.IsConflict(err) {
+				lastErr = err
+				continue
+			}
+			return fmt.Errorf("failed to patch ResourceClaim status: %v", err)
 		}
 		return nil
 	}

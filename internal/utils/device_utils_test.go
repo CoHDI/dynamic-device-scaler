@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -17,40 +18,58 @@ import (
 
 func TestGetConfiguredDeviceCount(t *testing.T) {
 	testCases := []struct {
-		name                         string
-		existingComposabilityRequest *cdioperator.ComposabilityRequestList
-		existingResourceClaim        *resourceapi.ResourceClaimList
-		resourceClaimInfos           []types.ResourceClaimInfo
-		resourceSliceInfos           []types.ResourceSliceInfo
-		model                        string
-		expectedResult               int64
-		wantErr                      bool
-		expectedErrMsg               string
+		name                           string
+		existingComposableResourceList *cdioperator.ComposableResourceList
+		existingResourceClaim          *resourceapi.ResourceClaimList
+		resourceClaimInfos             []types.ResourceClaimInfo
+		resourceSliceInfos             []types.ResourceSliceInfo
+		model                          string
+		nodeName                       string
+		expectedResult                 int64
+		wantErr                        bool
+		expectedErrMsg                 string
 	}{
 		{
 			name: "normal case",
-			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
-				Items: []cdioperator.ComposabilityRequest{
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name: "request1",
+							Name: "resource1",
 						},
-						Spec: cdioperator.ComposabilityRequestSpec{
-							Resource: cdioperator.ScalarResourceDetails{
-								Model: "A100 40G",
-							},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
 						},
-						Status: cdioperator.ComposabilityRequestStatus{
-							Resources: map[string]cdioperator.ScalarResourceStatus{
-								"resource1": {
-									State:        "Online",
-									DeviceIDUUID: "123",
-								},
-								"resource2": {
-									State:        "Online",
-									DeviceIDUUID: "456",
-								},
-							},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource2",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node2",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource3",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Failed",
+							DeviceID: "123",
 						},
 					},
 				},
@@ -89,7 +108,6 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 					Name:   "rs1",
 					Driver: "gpu.nvidia.com",
 					Pool:   "test",
-					State:  types.ResourceSliceStateRed,
 					Devices: []types.ResourceSliceDevice{
 						{
 							Name: "device1",
@@ -104,7 +122,8 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 			},
 			resourceClaimInfos: []types.ResourceClaimInfo{
 				{
-					Name: "test",
+					Name:     "test",
+					NodeName: "node1",
 					Devices: []types.ResourceClaimDevice{
 						{
 							Name:  "GPU1",
@@ -116,20 +135,31 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 							Model: "A100 40G",
 							State: "Preparing",
 						},
+						{
+							Name:  "GPU3",
+							Model: "A100 40G",
+							State: "Failed",
+						},
+						{
+							Name:  "GPU4",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
 					},
 				},
 			},
 			model:          "A100 40G",
-			expectedResult: 4,
+			nodeName:       "node1",
+			expectedResult: 3,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
-			if tc.existingComposabilityRequest != nil {
-				for i := range tc.existingComposabilityRequest.Items {
-					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
+			if tc.existingComposableResourceList != nil {
+				for i := range tc.existingComposableResourceList.Items {
+					clientObjects = append(clientObjects, &tc.existingComposableResourceList.Items[i])
 				}
 			}
 			if tc.existingResourceClaim != nil {
@@ -139,11 +169,11 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 			}
 
 			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			result, err := GetConfiguredDeviceCount(context.Background(), fakeClient, tc.model, tc.resourceClaimInfos, tc.resourceSliceInfos)
+			result, err := GetConfiguredDeviceCount(context.Background(), fakeClient, tc.model, tc.nodeName, tc.resourceClaimInfos, tc.resourceSliceInfos)
 
 			if tc.wantErr {
 				if err == nil {
@@ -174,6 +204,7 @@ func TestDynamicAttach(t *testing.T) {
 		count                        int64
 		model                        string
 		nodeName                     string
+		resourceType                 string
 		wantErr                      bool
 		expectedErrMsg               string
 	}{
@@ -218,6 +249,7 @@ func TestDynamicAttach(t *testing.T) {
 					},
 				},
 			},
+			resourceType: "gpu",
 			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
 				Items: []cdioperator.ComposabilityRequest{
 					{
@@ -253,7 +285,7 @@ func TestDynamicAttach(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			err := DynamicAttach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count, tc.model, tc.nodeName)
+			err := DynamicAttach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count, tc.resourceType, tc.model, tc.nodeName)
 
 			if tc.wantErr {
 				if err == nil {
@@ -312,32 +344,33 @@ func TestDynamicDetach(t *testing.T) {
 		existingComposabilityRequest *cdioperator.ComposabilityRequestList
 		existingComposableResource   *cdioperator.ComposableResourceList
 		updateComposabilityRequest   *cdioperator.ComposabilityRequest
+		nodeName                     string
+		labelPrefix                  string
+		deviceNoRemoval              time.Duration
 		count                        int64
 		wantErr                      bool
 		expectedErrMsg               string
 		expectedSize                 int64
 	}{
 		{
-			name: "nextSize less than composabilityRequest size",
-			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
-				Spec: cdioperator.ComposabilityRequestSpec{
-					Resource: cdioperator.ScalarResourceDetails{
-						Type:       "gpu",
-						Size:       4,
-						Model:      "A100 40G",
-						TargetNode: "node1",
-					},
-				},
-			},
-			count: 3,
+			name:            "nextSize less than composabilityRequest size",
+			deviceNoRemoval: time.Minute,
+			count:           3,
+			nodeName:        "node1",
+			labelPrefix:     "composable.test",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
-						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
-						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "res1",
+							Annotations: map[string]string{
+								"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
@@ -366,10 +399,6 @@ func TestDynamicDetach(t *testing.T) {
 					},
 				},
 			},
-			expectedSize: 3,
-		},
-		{
-			name: "nextSize less than composabilityRequest size",
 			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -383,18 +412,38 @@ func TestDynamicDetach(t *testing.T) {
 					},
 				},
 			},
-			count: 3,
+			expectedSize: 3,
+		},
+		{
+			name: "count less than resourceCount",
+
+			deviceNoRemoval: time.Minute,
+			count:           1,
+			nodeName:        "node1",
+			labelPrefix:     "composable.test",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
-						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
-						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "res1",
+							Annotations: map[string]string{
+								"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res2",
-							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
-							Finalizers:        []string{"dummy-finalizer"},
+							Name: "res2",
+							Annotations: map[string]string{
+								"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
 					},
@@ -409,7 +458,7 @@ func TestDynamicDetach(t *testing.T) {
 						Spec: cdioperator.ComposabilityRequestSpec{
 							Resource: cdioperator.ScalarResourceDetails{
 								Type:       "gpu",
-								Size:       2,
+								Size:       4,
 								Model:      "A100 40G",
 								TargetNode: "node1",
 							},
@@ -417,10 +466,6 @@ func TestDynamicDetach(t *testing.T) {
 					},
 				},
 			},
-			expectedSize: 3,
-		},
-		{
-			name: "count greater than composabilityRequest size",
 			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -428,27 +473,9 @@ func TestDynamicDetach(t *testing.T) {
 				Spec: cdioperator.ComposabilityRequestSpec{
 					Resource: cdioperator.ScalarResourceDetails{
 						Type:       "gpu",
-						Size:       2,
+						Size:       4,
 						Model:      "A100 40G",
 						TargetNode: "node1",
-					},
-				},
-			},
-			count: 4,
-			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
-				Items: []cdioperator.ComposabilityRequest{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "test",
-						},
-						Spec: cdioperator.ComposabilityRequestSpec{
-							Resource: cdioperator.ScalarResourceDetails{
-								Type:       "gpu",
-								Size:       2,
-								Model:      "A100 40G",
-								TargetNode: "node1",
-							},
-						},
 					},
 				},
 			},
@@ -476,7 +503,7 @@ func TestDynamicDetach(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			err := DynamicDetach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count)
+			err := DynamicDetach(context.Background(), fakeClient, tc.updateComposabilityRequest, tc.count, tc.nodeName, tc.labelPrefix, tc.deviceNoRemoval)
 
 			if tc.wantErr {
 				if err == nil {
@@ -501,160 +528,72 @@ func TestDynamicDetach(t *testing.T) {
 			if existingCR.Spec.Resource.Size != tc.expectedSize {
 				t.Errorf("Expected Size %d, got %d", tc.expectedSize, existingCR.Spec.Resource.Size)
 			}
-
 		})
 	}
 }
 
-func TestGetNextSize(t *testing.T) {
-	now := time.Now()
-	twoMinutesAgo := now.Add(-2 * time.Minute)
-	thirtySecondsAgo := now.Add(-30 * time.Second)
-
-	tests := []struct {
-		name                       string
-		existingComposableResource *cdioperator.ComposableResourceList
-		count                      int64
-		wantErr                    bool
-		expectedErrMsg             string
-		expectedSize               int64
+func TestIsDeviceResourceSliceRed(t *testing.T) {
+	testCases := []struct {
+		name                      string
+		deviceID                  string
+		resourceSliceInfos        []types.ResourceSliceInfo
+		expectedResult            bool
+		expectedResourceSliceInfo *types.ResourceSliceInfo
 	}{
 		{
-			name: "No qualified resources",
-			existingComposableResource: &cdioperator.ComposableResourceList{
-				Items: []cdioperator.ComposableResource{
-					{
-						ObjectMeta: metav1.ObjectMeta{Name: "res1"},
-						Status:     cdioperator.ComposableResourceStatus{State: "Online"},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res2",
-							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
-							Finalizers:        []string{"dummy-finalizer"},
+			name:     "device resourceSlice is red",
+			deviceID: "123",
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name: "rs0",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "123",
 						},
-						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
 					},
 				},
 			},
-			count:        3,
-			expectedSize: 3,
+			expectedResult: true,
+			expectedResourceSliceInfo: &types.ResourceSliceInfo{
+				Name: "rs0",
+				Devices: []types.ResourceSliceDevice{
+					{
+						Name: "gpu0",
+						UUID: "123",
+					},
+				},
+			},
 		},
 		{
-			name: "Some qualified (count less than resourceCount)",
-			existingComposableResource: &cdioperator.ComposableResourceList{
-				Items: []cdioperator.ComposableResource{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res1",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
+			name:     "device resourceSlice not red",
+			deviceID: "456",
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name: "rs0",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "123",
 						},
-						Status: cdioperator.ComposableResourceStatus{State: "Online"},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res2",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res3",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Offline"},
 					},
 				},
 			},
-			count:        1,
-			expectedSize: 1,
-		},
-		{
-			name: "Some qualified (count greater than resourceCount)",
-			existingComposableResource: &cdioperator.ComposableResourceList{
-				Items: []cdioperator.ComposableResource{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res1",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Online"},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res2",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res3",
-							DeletionTimestamp: &metav1.Time{Time: twoMinutesAgo.UTC()},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Offline"},
-					},
-				},
-			},
-			count:        3,
-			expectedSize: 3,
-		},
-		{
-			name: "Time unqualified resources",
-			existingComposableResource: &cdioperator.ComposableResourceList{
-				Items: []cdioperator.ComposableResource{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "res1",
-							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
-							Finalizers:        []string{"dummy-finalizer"},
-						},
-						Status: cdioperator.ComposableResourceStatus{State: "Online"},
-					},
-				},
-			},
-			count:        0,
-			expectedSize: 0,
+			expectedResult:            false,
+			expectedResourceSliceInfo: nil,
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			clientObjects := []runtime.Object{}
-			if tc.existingComposableResource != nil {
-				for i := range tc.existingComposableResource.Items {
-					clientObjects = append(clientObjects, &tc.existingComposableResource.Items[i])
-				}
+
+			result, resourceSliceInfo := IsDeviceResourceSliceRed(tc.deviceID, tc.resourceSliceInfos)
+			if result != tc.expectedResult {
+				t.Errorf("Expected result %v, got %v", tc.expectedResult, result)
 			}
 
-			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
-
-			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
-
-			gotSize, err := getNextSize(context.Background(), fakeClient, tc.count)
-
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("Expected error, but got nil")
-				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			if gotSize != tc.expectedSize {
-				t.Errorf("Unexpected size. Want: %d, Got:  %d", tc.expectedSize, gotSize)
+			if !reflect.DeepEqual(resourceSliceInfo, tc.expectedResourceSliceInfo) {
+				t.Errorf("Expected resourceSliceInfo %v, got %v", tc.expectedResourceSliceInfo, resourceSliceInfo)
 			}
 		})
 	}
