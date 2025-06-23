@@ -99,6 +99,17 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 									Resource: "pods",
 								},
 							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "device1",
+											Pool:   "test",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -122,7 +133,7 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 			},
 			resourceClaimInfos: []types.ResourceClaimInfo{
 				{
-					Name:     "test",
+					Name:     "rs1",
 					NodeName: "node1",
 					Devices: []types.ResourceClaimDevice{
 						{
@@ -135,11 +146,12 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 							Model: "A100 40G",
 							State: "Preparing",
 						},
-						{
-							Name:  "GPU3",
-							Model: "A100 40G",
-							State: "Failed",
-						},
+					},
+				},
+				{
+					Name:     "rs2",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
 						{
 							Name:  "GPU4",
 							Model: "A100 80G",
@@ -147,10 +159,21 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 						},
 					},
 				},
+				{
+					Name:     "rs3",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU5",
+							Model: "A100 40G",
+							State: "Reschedule",
+						},
+					},
+				},
 			},
 			model:          "A100 40G",
 			nodeName:       "node1",
-			expectedResult: 3,
+			expectedResult: 4,
 		},
 	}
 
@@ -539,6 +562,7 @@ func TestIsDeviceResourceSliceRed(t *testing.T) {
 		resourceSliceInfos        []types.ResourceSliceInfo
 		expectedResult            bool
 		expectedResourceSliceInfo *types.ResourceSliceInfo
+		expectedDeviceName        string
 	}{
 		{
 			name:     "device resourceSlice is red",
@@ -564,6 +588,7 @@ func TestIsDeviceResourceSliceRed(t *testing.T) {
 					},
 				},
 			},
+			expectedDeviceName: "gpu0",
 		},
 		{
 			name:     "device resourceSlice not red",
@@ -587,13 +612,17 @@ func TestIsDeviceResourceSliceRed(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			result, resourceSliceInfo := IsDeviceResourceSliceRed(tc.deviceID, tc.resourceSliceInfos)
+			result, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(tc.deviceID, tc.resourceSliceInfos)
 			if result != tc.expectedResult {
 				t.Errorf("Expected result %v, got %v", tc.expectedResult, result)
 			}
 
 			if !reflect.DeepEqual(resourceSliceInfo, tc.expectedResourceSliceInfo) {
 				t.Errorf("Expected resourceSliceInfo %v, got %v", tc.expectedResourceSliceInfo, resourceSliceInfo)
+			}
+
+			if deviceName != tc.expectedDeviceName {
+				t.Errorf("Expected deviceName %q, got %q", tc.expectedDeviceName, deviceName)
 			}
 		})
 	}

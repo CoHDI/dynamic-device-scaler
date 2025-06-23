@@ -4,12 +4,12 @@ metadata:
   labels:
     app.kubernetes.io/name: dynamic-device-scaler
     app.kubernetes.io/managed-by: kustomize
-  name: manager-rolebinding
+  name: dds-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: manager-role
+  name: dynamic-device-scaler-role
 subjects:
 - kind: ServiceAccount
-  name: controller-manager
-  namespace: system
+  name: dds-controller-manager
+  namespace: composable-dra

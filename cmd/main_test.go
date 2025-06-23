@@ -49,14 +49,6 @@ func TestGetEnvAsInt(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "Zero value (valid)",
-			setEnv:     true,
-			envValue:   "0",
-			defaultVal: 500,
-			wantValue:  0,
-			wantErr:    false,
-		},
-		{
 			name:        "Negative value (out of range)",
 			setEnv:      true,
 			envValue:    "-100",

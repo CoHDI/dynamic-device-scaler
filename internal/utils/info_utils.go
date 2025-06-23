@@ -12,10 +12,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]types.ResourceClaimInfo, error) {
+func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composableDRASpec types.ComposableDRASpec) ([]types.ResourceClaimInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start collecting ResourceClaim info")
+
 	var resourceClaimInfoList []types.ResourceClaimInfo
 
 	resourceClaimList := &resourceapi.ResourceClaimList{}
@@ -29,7 +33,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 	}
 
 	for _, rc := range resourceClaimList.Items {
-		if len(rc.Status.ReservedFor) == 0 {
+		if len(rc.Status.ReservedFor) == 0 || rc.Status.Allocation == nil {
 			continue
 		}
 
@@ -37,50 +41,72 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceClaimInfo.Name = rc.Name
 		resourceClaimInfo.Namespace = rc.Namespace
 		resourceClaimInfo.CreationTimestamp = rc.ObjectMeta.CreationTimestamp
-		for _, device := range rc.Status.Devices {
-			//TODO: wait for KEP5007
+		if rc.Status.Allocation.NodeSelector != nil {
+			resourceClaimInfo.NodeName = getNodeName(*rc.Status.Allocation.NodeSelector)
+		}
 
-			// if len(device.BindingConditions) == 0 {
-			// 	continue
-			// }
+		for _, device := range rc.Status.Allocation.Devices.Results {
+			if len(device.BindingConditions) == 0 {
+				continue
+			}
 			var deviceInfo types.ResourceClaimDevice
 			deviceInfo.Name = device.Device
 
-			if resourceClaimInfo.NodeName == "" {
-			ResourceSliceLoop:
-				for _, rs := range resourceSliceList.Items {
-					if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
-						for _, resourceSliceDevice := range rs.Spec.Devices {
-							if resourceSliceDevice.Name == device.Device {
-								resourceClaimInfo.NodeName = rs.Spec.NodeName
-								resourceClaimInfo.ResourceSliceName = rs.Name
-								break ResourceSliceLoop
+		ResourceSliceLoop:
+			for _, rs := range resourceSliceList.Items {
+				if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
+					for _, resourceSliceDevice := range rs.Spec.Devices {
+						if resourceSliceDevice.Name == device.Device {
+							model, err := getModelName(composableDRASpec, "", *resourceSliceDevice.Basic.Attributes["productName"].StringValue)
+							logger.Info("Found model name for device", "device", device.Device, "model", model)
+							if err != nil {
+								return nil, err
+							}
+							deviceInfo.Model = model
+							break ResourceSliceLoop
+						}
+					}
+				}
+			}
+
+			if len(rc.Status.Devices) == 0 {
+				deviceInfo.State = "Preparing"
+			} else {
+				//TODO
+				for _, deivedeviceInfo := range rc.Status.Devices {
+					if deivedeviceInfo.Device == device.Device {
+						if deivedeviceInfo.Conditions != nil {
+							if hasConditionWithStatus(deivedeviceInfo.Conditions, "FabricDeviceReschedule", metav1.ConditionTrue) {
+								deviceInfo.State = "Reschedule"
+							} else if hasConditionWithStatus(deivedeviceInfo.Conditions, "FabricDeviceFailed", metav1.ConditionTrue) {
+								deviceInfo.State = "Failed"
+							} else if !hasMatchingBindingCondition(deivedeviceInfo.Conditions, device.BindingConditions, device.BindingFailureConditions) {
+								deviceInfo.State = "Preparing"
 							}
 						}
 					}
 				}
 			}
 
-			if device.Conditions != nil {
-				if device.Conditions[0].Type == "FabricDeviceReschedule" && device.Conditions[0].Status == "True" {
-					deviceInfo.State = "Reschedule"
-				} else if device.Conditions[0].Type == "FabricDeviceFailed" && device.Conditions[0].Status == "True" {
-					deviceInfo.State = "Failed"
-				} else {
-					deviceInfo.State = "Preparing"
-				}
-			}
-
 			resourceClaimInfo.Devices = append(resourceClaimInfo.Devices, deviceInfo)
+		}
+
+		if len(resourceClaimInfo.Devices) == 0 {
+			continue
 		}
 
 		resourceClaimInfoList = append(resourceClaimInfoList, resourceClaimInfo)
 	}
 
+	logger.V(1).Info("Finish collecting ResourceClaim info", "resourceClaimInfos", resourceClaimInfoList)
+
 	return resourceClaimInfoList, nil
 }
 
 func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]types.ResourceSliceInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start collecting ResourceSlice info")
+
 	var resourceSliceInfoList []types.ResourceSliceInfo
 
 	resourceSliceList := &resourceapi.ResourceSliceList{}
@@ -89,6 +115,10 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 	}
 
 	for _, rs := range resourceSliceList.Items {
+		if hasBindingConditions(rs) {
+			continue
+		}
+
 		var resourceSliceInfo types.ResourceSliceInfo
 
 		resourceSliceInfo.Name = rs.Name
@@ -96,11 +126,6 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfo.Driver = rs.Spec.Driver
 		resourceSliceInfo.NodeName = rs.Spec.NodeName
 		resourceSliceInfo.Pool = rs.Spec.Pool.Name
-
-		//TODO: wait for KEP5007
-		// if len(rs.Spec.Devices) > 0 && len(rs.Spec.Devices[0].Basic.BindingConditions) > 0 {
-		// 	continue
-		// }
 
 		for _, device := range rs.Spec.Devices {
 			if device.Basic != nil {
@@ -118,16 +143,27 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfoList = append(resourceSliceInfoList, resourceSliceInfo)
 	}
 
+	logger.V(1).Info("Finish collecting ResourceSlice info", "resourceSliceInfos", resourceSliceInfoList)
+
 	return resourceSliceInfoList, nil
 }
 
 func GetNodeInfo(ctx context.Context, clientSet kubernetes.Interface, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start collecting Node info")
+
 	nodes, err := clientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Nodes: %v", err)
 	}
 
-	return processNodeInfo(nodes, composableDRASpec)
+	nodeInfos, err := processNodeInfo(nodes, composableDRASpec)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.V(1).Info("Finish collecting Node info", "nodeInfos", nodeInfos)
+	return nodeInfos, nil
 }
 
 func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
@@ -153,7 +189,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				deviceName := suffix[:len(suffix)-9]
-				model, err := getModelName(composableDRASpec, deviceName)
+				model, err := getModelName(composableDRASpec, deviceName, "")
 				if err != nil {
 					return nil, err
 				}
@@ -184,7 +220,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				deviceName := suffix[:len(suffix)-9]
-				model, err := getModelName(composableDRASpec, deviceName)
+				model, err := getModelName(composableDRASpec, deviceName, "")
 				if err != nil {
 					return nil, err
 				}
@@ -217,10 +253,20 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 	return nodeInfoList, nil
 }
 
-func getModelName(composableDRASpec types.ComposableDRASpec, deviceName string) (string, error) {
-	for _, deviceInfo := range composableDRASpec.DeviceInfos {
-		if deviceInfo.K8sDeviceName == deviceName {
-			return deviceInfo.CDIModelName, nil
+func getModelName(composableDRASpec types.ComposableDRASpec, deviceName, productName string) (string, error) {
+	if deviceName != "" {
+		for _, deviceInfo := range composableDRASpec.DeviceInfos {
+			if deviceInfo.K8sDeviceName == deviceName {
+				return deviceInfo.CDIModelName, nil
+			}
+		}
+	}
+
+	if productName != "" {
+		for _, deviceInfo := range composableDRASpec.DeviceInfos {
+			if deviceInfo.DRAAttributes["productName"] == productName {
+				return deviceInfo.CDIModelName, nil
+			}
 		}
 	}
 
@@ -228,6 +274,9 @@ func getModelName(composableDRASpec types.ComposableDRASpec, deviceName string) 
 }
 
 func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (types.ComposableDRASpec, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start collecting ConfigMap info")
+
 	var composableDRASpec types.ComposableDRASpec
 
 	configMap, err := clientSet.CoreV1().ConfigMaps("composable-dra").Get(ctx, "composable-dra-dds", metav1.GetOptions{})
@@ -245,5 +294,71 @@ func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (type
 		return composableDRASpec, fmt.Errorf("failed to parse fabric-id-range: %v", err)
 	}
 
+	logger.V(1).Info("Finish collecting ConfigMap info", "composableDRASpec", composableDRASpec)
+
 	return composableDRASpec, nil
+}
+
+func hasConditionWithStatus(conditions []metav1.Condition, conditionType string, status metav1.ConditionStatus) bool {
+	for _, c := range conditions {
+		if c.Type == conditionType && c.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMatchingBindingCondition(
+	conditions []metav1.Condition,
+	bindingConditions []string,
+	bindingFailureConditions []string,
+) bool {
+	if len(conditions) == 0 {
+		return false
+	}
+
+	conditionSet := make(map[string]struct{}, len(bindingConditions)+len(bindingFailureConditions))
+
+	for _, cond := range bindingConditions {
+		conditionSet[cond] = struct{}{}
+	}
+
+	for _, cond := range bindingFailureConditions {
+		conditionSet[cond] = struct{}{}
+	}
+
+	if len(conditionSet) == 0 {
+		return false
+	}
+
+	for _, condition := range conditions {
+		if _, exists := conditionSet[condition.Type]; exists {
+			if condition.Status == metav1.ConditionTrue {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func hasBindingConditions(rs resourceapi.ResourceSlice) bool {
+	for _, device := range rs.Spec.Devices {
+		if len(device.Basic.BindingConditions) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func getNodeName(selector v1.NodeSelector) string {
+	for _, term := range selector.NodeSelectorTerms {
+		for _, field := range term.MatchFields {
+			if field.Key == "metadata.name" && field.Operator == "In" {
+				return field.Values[0]
+			}
+		}
+	}
+	return ""
 }

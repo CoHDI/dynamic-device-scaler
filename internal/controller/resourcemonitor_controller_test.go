@@ -83,6 +83,17 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 									Resource: "pods",
 								},
 							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "gpu0",
+											Pool:   "gpu-pool",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -126,6 +137,17 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 									Resource: "pods",
 								},
 							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "gpu0",
+											Pool:   "gpu-pool",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -145,7 +167,7 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 			},
 			expectedUpdate: false,
 			wantErr:        true,
-			expectedErrMsg: "failed to update ComposableResource:  \"\" is invalid: metadata.name: Required value: name is required",
+			expectedErrMsg: "failed to update ComposableResource: failed to patch ComposableResource:  \"\" is invalid: metadata.name: Required value: name is required",
 		},
 		{
 			name:        "resource do not match ResourceSliceInfo",
@@ -218,6 +240,17 @@ func TestUpdateComposableResourceLastUsedTime(t *testing.T) {
 								{
 									Name:     "pod0",
 									Resource: "pods",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "gpu0",
+											Pool:   "gpu-pool",
+											Driver: "gpu.nvidia.com",
+										},
+									},
 								},
 							},
 						},

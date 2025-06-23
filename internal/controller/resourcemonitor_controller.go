@@ -24,21 +24,20 @@ import (
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/utils"
-	"github.com/go-logr/logr"
+
 	resourceapi "k8s.io/api/resource/v1beta1"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ResourceMonitorReconciler reconciles a ResourceMonitor object
 type ResourceMonitorReconciler struct {
 	client.Client
 	ClientSet          *kubernetes.Clientset
-	Log                logr.Logger
 	Scheme             *runtime.Scheme
 	ScanInterval       time.Duration
 	DeviceNoRemoval    time.Duration
@@ -64,7 +63,10 @@ type ResourceMonitorReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	reqLogger := ctrl.Log.WithName("DDS")
+	ctx = ctrl.LoggerInto(ctx, reqLogger)
+
+	reqLogger.Info("Start reconcile")
 
 	resourceClaimInfos, resourceSliceInfos, nodeInfos, composableDRASpec, err := r.collectInfo(ctx)
 	if err != nil {
@@ -81,23 +83,28 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	reqLogger.Info("Reconcile completed successfully", "ScanInterval", r.ScanInterval, "DeviceNoRemoval", r.DeviceNoRemoval, "DeviceNoAllocation", r.DeviceNoAllocation)
+
 	return ctrl.Result{RequeueAfter: r.ScanInterval}, err
 }
 
 func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.ResourceClaimInfo, []types.ResourceSliceInfo, []types.NodeInfo, types.ComposableDRASpec, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Start collecting information")
+
 	var composableDRASpec types.ComposableDRASpec
 
-	resourceClaimInfos, err := utils.GetResourceClaimInfo(ctx, r.Client)
+	composableDRASpec, err := utils.GetConfigMapInfo(ctx, r.ClientSet)
+	if err != nil {
+		return nil, nil, nil, composableDRASpec, err
+	}
+
+	resourceClaimInfos, err := utils.GetResourceClaimInfo(ctx, r.Client, composableDRASpec)
 	if err != nil {
 		return nil, nil, nil, composableDRASpec, err
 	}
 
 	resourceSliceInfos, err := utils.GetResourceSliceInfo(ctx, r.Client)
-	if err != nil {
-		return nil, nil, nil, composableDRASpec, err
-	}
-
-	composableDRASpec, err = utils.GetConfigMapInfo(ctx, r.ClientSet)
 	if err != nil {
 		return nil, nil, nil, composableDRASpec, err
 	}
@@ -111,6 +118,9 @@ func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.Re
 }
 
 func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx context.Context, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Start updating ComposableResource last used time")
+
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := r.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return fmt.Errorf("failed to list ComposableResourceList: %v", err)
@@ -118,9 +128,9 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 
 	for _, resource := range resourceList.Items {
 		if resource.Status.State == "Online" {
-			isRed, resourceSliceInfo := utils.IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
+			isRed, resourceSliceInfo, deviceName := utils.IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
 			if isRed {
-				isUsed, err := utils.IsDeviceUsedByPod(ctx, r.Client, resource.Status.DeviceID, *resourceSliceInfo)
+				isUsed, err := utils.IsDeviceUsedByPod(ctx, r.Client, deviceName, *resourceSliceInfo)
 				if err != nil {
 					return err
 				}
@@ -138,14 +148,21 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 }
 
 func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Start handling nodes")
+
 	var err error
 	for _, nodeInfo := range nodeInfos {
 		var nodeResourceClaimInfos []types.ResourceClaimInfo
+
 		for _, resourceClaimInfo := range resourceClaimInfos {
 			if resourceClaimInfo.NodeName == nodeInfo.Name {
 				nodeResourceClaimInfos = append(nodeResourceClaimInfos, resourceClaimInfo)
 			}
 		}
+
+		newLogger := logger.WithValues("nodeName", nodeInfo.Name)
+		ctx = ctrl.LoggerInto(ctx, newLogger)
 
 		nodeResourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
@@ -172,6 +189,9 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 }
 
 func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start handling node devices")
+
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := r.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return err
@@ -182,15 +202,22 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 	for _, device := range composableDRASpec.DeviceInfos {
 		requestExit = false
 
+		newLogger := logger.WithValues("deviceModel", device.CDIModelName)
+		ctx = ctrl.LoggerInto(ctx, newLogger)
+
 		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, nodeInfo.Name, resourceClaimInfos, resourceSliceInfos)
 		if err != nil {
 			return err
 		}
 
+		logger.Info("Configured devices count", "count", cofiguredDeviceCount)
+
 		_, minCountLimit := utils.GetModelLimit(nodeInfo, device.CDIModelName)
 		if cofiguredDeviceCount < minCountLimit {
 			cofiguredDeviceCount = minCountLimit
 		}
+
+		logger.Info("Actual cofiguredDeviceCount", "count", cofiguredDeviceCount)
 
 		for _, cr := range composabilityRequestList.Items {
 			if cr.Spec.Resource.Model == device.CDIModelName && cr.Spec.Resource.TargetNode == nodeInfo.Name {
