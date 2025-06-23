@@ -10,6 +10,7 @@ import (
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -27,6 +28,14 @@ func sortByTime(resourceClaims []types.ResourceClaimInfo, order string) {
 }
 
 func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client, node types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) ([]types.ResourceClaimInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start RescheduleFailedNotification")
+
+	logger.Info("len", "resourceClaimInfos", len(resourceClaimInfos))
+	logger.Info("info", "resourceClaimInfos", resourceClaimInfos)
+	logger.Info("len", "resourceSliceInfos", len(resourceSliceInfos))
+	logger.Info("info", "resourceSliceInfos", resourceSliceInfos)
+
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, err
@@ -86,6 +95,7 @@ outerLoop:
 				}
 			}
 		}
+
 		modelMap := getUniqueModelsWithCounts(rc)
 		for model := range modelMap {
 			cofiguredDeviceCount, err := GetConfiguredDeviceCount(ctx, kubeClient, model, node.Name, resourceClaimInfos, resourceSliceInfos)
@@ -93,6 +103,7 @@ outerLoop:
 				return resourceClaimInfos, err
 			}
 			maxDevice, _ := GetModelLimit(node, model)
+			logger.Info("Configured device count", "model", model, "count", cofiguredDeviceCount, "max", maxDevice)
 
 			if cofiguredDeviceCount > maxDevice {
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
@@ -118,9 +129,23 @@ func GetModelLimit(node types.NodeInfo, model string) (max int64, min int64) {
 }
 
 func RescheduleNotification(ctx context.Context, kubeClient client.Client, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string, deviceNoAllocation time.Duration) ([]types.ResourceClaimInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start RescheduleNotification")
+
+	logger.Info("len", "resourceClaimInfos", len(resourceClaimInfos))
+	logger.Info("info", "resourceClaimInfos", resourceClaimInfos)
+	logger.Info("len", "resourceSliceInfos", len(resourceSliceInfos))
+	logger.Info("info", "resourceSliceInfos", resourceSliceInfos)
+
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, fmt.Errorf("failed to list composableResourceList: %v", err)
+	}
+
+	//TODO:
+	if len(resourceList.Items) == 0 {
+		logger.Info("No ComposableResource found, skipping reschedule notification")
+		return resourceClaimInfos, nil
 	}
 
 	sortByTime(resourceClaimInfos, "Ascending")
@@ -137,9 +162,9 @@ OuterLoop:
 			for _, resource := range resourceList.Items {
 				if resource.Spec.Model == model && resource.Spec.TargetNode == rc.NodeName {
 					if !resourceMatched[resource.Name] && resource.Status.State == "Online" {
-						isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.Status.CDIDeviceID, resourceSliceInfos)
+						isRed, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(resource.Status.CDIDeviceID, resourceSliceInfos)
 						if isRed {
-							isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.Status.CDIDeviceID, *resourceSliceInfo)
+							isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, deviceName, *resourceSliceInfo)
 							if err != nil {
 								return resourceClaimInfos, err
 							}
@@ -198,20 +223,19 @@ func getUniqueModelsWithCounts(resourceClaimInfo types.ResourceClaimInfo) map[st
 }
 
 func isLastUsedOverTime(resource cdioperator.ComposableResource, labelPrefix string, deviceNoAllocation time.Duration) (bool, error) {
-	annotations := resource.GetAnnotations()
-	if annotations == nil {
-		return false, fmt.Errorf("annotations not found")
-	}
-
 	var lastUsedTime time.Time
 	var err error
+
+	annotations := resource.GetAnnotations()
+	if annotations == nil {
+		return true, nil
+	}
 
 	label := labelPrefix + "/last-used-time"
 	lastUsedStr, exists := annotations[label]
 	if !exists {
-		lastUsedTime = resource.CreationTimestamp.Time
+		return true, nil
 	} else {
-
 		lastUsedTime, err = time.Parse(time.RFC3339, lastUsedStr)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse time: %v", err)
@@ -240,6 +264,12 @@ func isDeviceCoexistence(model1, model2 string, composableDRASpec types.Composab
 }
 
 func setDevicesState(ctx context.Context, kubeClient client.Client, resourceClaimInfo types.ResourceClaimInfo, targetState string, conditionType string) (types.ResourceClaimInfo, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start setDevicesState",
+		"resourceClaimInfoName", resourceClaimInfo.Name,
+		"conditionType", conditionType,
+		"targetState", targetState)
+
 	for k := range resourceClaimInfo.Devices {
 		resourceClaimInfo.Devices[k].State = targetState
 	}

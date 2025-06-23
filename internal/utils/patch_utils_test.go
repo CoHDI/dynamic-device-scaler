@@ -122,10 +122,8 @@ func TestUpdateNodeLabel(t *testing.T) {
 					{
 						Index:        1,
 						CDIModelName: "A100 40G",
-						DRAttributes: []types.DRAttribute{
-							{
-								ProductName: "NVIDIA A100 40GB PCIe",
-							},
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 40GB PCIe",
 						},
 						LabelKeyModel:     "composable-a100-40G",
 						DriverName:        "gpu.nvidia.com",
@@ -135,10 +133,8 @@ func TestUpdateNodeLabel(t *testing.T) {
 					{
 						Index:        2,
 						CDIModelName: "A100 80G",
-						DRAttributes: []types.DRAttribute{
-							{
-								ProductName: "NVIDIA A100 80GB PCIe",
-							},
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB PCIe",
 						},
 						LabelKeyModel:     "composable-a100-80G",
 						DriverName:        "gpu.nvidia.com",
@@ -148,10 +144,8 @@ func TestUpdateNodeLabel(t *testing.T) {
 					{
 						Index:        3,
 						CDIModelName: "H100",
-						DRAttributes: []types.DRAttribute{
-							{
-								ProductName: "NVIDIA H100 PCIe",
-							},
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA H100 PCIe",
 						},
 						LabelKeyModel:     "composable-h100",
 						DriverName:        "gpu.nvidia.com",
@@ -161,10 +155,8 @@ func TestUpdateNodeLabel(t *testing.T) {
 					{
 						Index:        4,
 						CDIModelName: "CXL-mem",
-						DRAttributes: []types.DRAttribute{
-							{
-								ProductName: "CXL mem",
-							},
+						DRAAttributes: map[string]string{
+							"productName": "CXL mem",
 						},
 						DriverName:        "cxl-mem",
 						LabelKeyModel:     "cxl-mem",

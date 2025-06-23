@@ -1,4 +1,4 @@
-ARG BUILD_IMAGE=docker.io/golang:1.23
+ARG BUILD_IMAGE=docker.io/golang:1.24
 ARG BASE_IMAGE=gcr.io/distroless/static:nonroot
 
 # Build the manager binary
@@ -21,5 +21,3 @@ FROM $BASE_IMAGE
 WORKDIR /
 COPY --from=builder /workspace/dynamic-device-scaler .
 USER nonroot:nonroot
-
-ENTRYPOINT ["/dynamic-device-scaler"]

@@ -9,10 +9,14 @@ import (
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, model, nodeName string, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start getting configured device count")
+
 	preparingDeviceCount := getPreparingDevicesCount(resourceClaimInfos, model, nodeName)
 
 	podAllocatedDevicesCount, err := getPodAllocatedDevicesCount(ctx, kubeClient, model, nodeName, resourceSliceInfos)
@@ -20,7 +24,11 @@ func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, mod
 		return 0, err
 	}
 
-	return preparingDeviceCount + podAllocatedDevicesCount, nil
+	rescheduleDeviceCount := getRescheduleDevicesCount(resourceClaimInfos, model, nodeName)
+
+	logger.V(1).Info("Finish getting configured device count", "preparingDeviceCount", preparingDeviceCount, "podAllocatedDevicesCount", podAllocatedDevicesCount, "rescheduleDeviceCount", rescheduleDeviceCount)
+
+	return preparingDeviceCount + podAllocatedDevicesCount + rescheduleDeviceCount, nil
 }
 
 func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
@@ -54,9 +62,9 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 		}
 		if resource.Spec.Model == model {
 			if resource.Status.State == "Online" {
-				isRed, resourceSliceInfo := IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
+				isRed, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
 				if isRed {
-					isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, resource.Status.DeviceID, *resourceSliceInfo)
+					isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, deviceName, *resourceSliceInfo)
 					if err != nil {
 						return count, err
 					}
@@ -71,25 +79,36 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 	return count, nil
 }
 
-func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceID string, resourceSliceInfo types.ResourceSliceInfo) (bool, error) {
+func getRescheduleDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
+	var count int64
+
+	for _, rc := range resourceClaimInfos {
+		if rc.NodeName != nodeName {
+			continue
+		}
+		for _, device := range rc.Devices {
+			if device.Model == model && device.State == "Reschedule" {
+				count++
+			}
+		}
+	}
+
+	return count
+}
+
+func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceName string, resourceSliceInfo types.ResourceSliceInfo) (bool, error) {
 	resourceClaimList := &resourceapi.ResourceClaimList{}
 	if err := kubeClient.List(ctx, resourceClaimList, &client.ListOptions{}); err != nil {
 		return false, fmt.Errorf("failed to list ResourceClaims: %v", err)
 	}
 
-	for _, resourceSliceDevice := range resourceSliceInfo.Devices {
-		if resourceSliceDevice.UUID == deviceID {
-			for _, resourceClaim := range resourceClaimList.Items {
-				for _, resourceClaimDevice := range resourceClaim.Status.Devices {
-					if resourceSliceInfo.Pool == resourceClaimDevice.Pool &&
-						resourceSliceInfo.Driver == resourceClaimDevice.Driver &&
-						resourceSliceDevice.Name == resourceClaimDevice.Device {
-						if resourceClaim.Status.ReservedFor != nil {
-							if resourceClaim.Status.ReservedFor[0].Resource == "pods" {
-								return true, nil
-							}
-						}
-					}
+	for _, resourceClaim := range resourceClaimList.Items {
+		if resourceClaim.Status.Allocation != nil {
+			for _, resourceClaimDevice := range resourceClaim.Status.Allocation.Devices.Results {
+				if resourceSliceInfo.Pool == resourceClaimDevice.Pool &&
+					resourceSliceInfo.Driver == resourceClaimDevice.Driver &&
+					deviceName == resourceClaimDevice.Device {
+					return true, nil
 				}
 			}
 		}
@@ -98,19 +117,22 @@ func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceID s
 	return false, nil
 }
 
-func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, *types.ResourceSliceInfo) {
+func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, *types.ResourceSliceInfo, string) {
 	for _, resourceSlice := range resourceSliceInfos {
 		for _, resourceSliceDevice := range resourceSlice.Devices {
 			if resourceSliceDevice.UUID == deviceID {
-				return true, &resourceSlice
+				return true, &resourceSlice, resourceSliceDevice.Name
 			}
 		}
 	}
 
-	return false, nil
+	return false, nil, ""
 }
 
 func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, resourceType, model, nodeName string) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Start dynamic attach")
+
 	if cr == nil {
 		return createNewComposabilityRequestCR(ctx, kubeClient, count, resourceType, model, nodeName)
 	}
@@ -119,6 +141,12 @@ func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 }
 
 func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, resourceType, model, node string) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Create new ComposabilityRequestCR",
+		"resourceType", resourceType,
+		"requestCount", count)
+
 	newCR := &cdioperator.ComposabilityRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "composability-",
@@ -141,6 +169,9 @@ func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Clie
 }
 
 func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, nodeName, labelPrefix string, deviceNoRemoval time.Duration) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Start dynamic detach")
+
 	nextSize, err := getNextSize(ctx, kubeClient, count, nodeName, labelPrefix, deviceNoRemoval)
 	if err != nil {
 		return fmt.Errorf("failed to get next size: %v", err)

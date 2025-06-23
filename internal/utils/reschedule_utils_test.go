@@ -214,15 +214,13 @@ func TestIsLastUsedOverMinute(t *testing.T) {
 			name:               "No annotations",
 			annotations:        nil,
 			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
-			expectedErr:        true,
-			errMsg:             "annotations not found",
+			expectedResult:     true,
 		},
 		{
 			name:               "Annotation not found",
 			annotations:        map[string]string{},
 			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
+			expectedResult:     true,
 		},
 		{
 			name: "Invalid time format",

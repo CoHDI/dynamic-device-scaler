@@ -7,15 +7,11 @@ type ComposableDRASpec struct {
 }
 
 type DeviceInfo struct {
-	Index             int           `json:"index"`
-	CDIModelName      string        `json:"cdi-model-name"`
-	DRAttributes      []DRAttribute `json:"dra-attributes"`
-	LabelKeyModel     string        `json:"label-key-model"`
-	DriverName        string        `json:"driver-name"`
-	K8sDeviceName     string        `json:"k8s-device-name"`
-	CannotCoexistWith []int         `json:"cannot-coexist-with"`
-}
-
-type DRAttribute struct {
-	ProductName string `json:"productName"`
+	Index             int               `json:"index"`
+	CDIModelName      string            `json:"cdi-model-name"`
+	DRAAttributes     map[string]string `json:"dra-attributes"`
+	LabelKeyModel     string            `json:"label-key-model"`
+	DriverName        string            `json:"driver-name"`
+	K8sDeviceName     string            `json:"k8s-device-name"`
+	CannotCoexistWith []int             `json:"cannot-coexist-with"`
 }

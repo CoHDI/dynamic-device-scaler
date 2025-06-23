@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -64,6 +65,13 @@ func patchNodeLabel(clientset kubernetes.Interface, nodeName string, addLabels, 
 }
 
 func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Client, resourceName, key, value string) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Start patch ComposableResource annotation",
+		"name", resourceName,
+		"key", key,
+		"value", value)
+
 	var lastErr error
 
 	patch := map[string]any{
@@ -116,6 +124,12 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 }
 
 func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client, requestName string, count int64) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Start patch ComposabilityRequest size",
+		"name", requestName,
+		"patchSize", count)
+
 	var lastErr error
 
 	for range maxRetries {
@@ -129,11 +143,20 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 			return fmt.Errorf("failed to get ComposabilityRequest: %v", err)
 		}
 
-		modifiedCR := existingCR.DeepCopy()
-		modifiedCR.Spec.Resource.Size = count
+		patchOpts := []map[string]interface{}{
+			{
+				"op":    "replace",
+				"path":  "/spec/resource/size",
+				"value": count,
+			},
+		}
 
-		patch := client.StrategicMergeFrom(existingCR.DeepCopy())
-		if err := kubeClient.Patch(ctx, modifiedCR, patch); err != nil {
+		patchBytes, err := json.Marshal(patchOpts)
+		if err != nil {
+			return fmt.Errorf("patch marshal error: %w", err)
+		}
+
+		if err := kubeClient.Patch(ctx, existingCR, client.RawPatch(k8stypes.JSONPatchType, patchBytes)); err != nil {
 			if apierrors.IsConflict(err) {
 				lastErr = err
 				continue
@@ -146,6 +169,13 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 }
 
 func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.Client, name, namespace, conditionType string) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Start patch ResourceClaim DeviceConditions",
+		"name", name,
+		"namespace", namespace,
+		"conditionType", conditionType)
+
 	var lastErr error
 
 	for range maxRetries {
@@ -200,6 +230,9 @@ func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.C
 }
 
 func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet kubernetes.Interface, nodeName string, composableDRASpec types.ComposableDRASpec) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.V(1).Info("Start updating Node label")
+
 	var installedDevices []string
 
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,61 +26,31 @@ func TestGetResourceClaimInfo(t *testing.T) {
 		name                      string
 		existingResourceClaimList *resourceapi.ResourceClaimList
 		existingResourceSliceList *resourceapi.ResourceSliceList
+		composableDRASpec         types.ComposableDRASpec
 		expectedResourceClaimInfo []types.ResourceClaimInfo
 		wantErr                   bool
 		expectedErrMsg            string
 	}{
 		{
 			name: "normal case",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB",
+						},
+					},
+				},
+			},
 			existingResourceClaimList: &resourceapi.ResourceClaimList{
 				Items: []resourceapi.ResourceClaim{
 					{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:              "test-claim-0",
-							Namespace:         "default",
-							CreationTimestamp: metav1.Time{Time: now},
-						},
-						Status: resourceapi.ResourceClaimStatus{
-							ReservedFor: []resourceapi.ResourceClaimConsumerReference{},
-							Devices: []resourceapi.AllocatedDeviceStatus{
-								{
-									Driver: "gpu-0",
-									Device: "gpu.nvidia.com",
-								},
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
 							Name:              "test-claim-1",
-							Namespace:         "default",
-							CreationTimestamp: metav1.Time{Time: now},
-						},
-						Status: resourceapi.ResourceClaimStatus{
-							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
-								{
-									Resource: "pods",
-									Name:     "test-pod-1",
-									UID:      "1234",
-								},
-							},
-							Devices: []resourceapi.AllocatedDeviceStatus{
-								{
-									Driver: "gpu.nvidia.com",
-									Device: "gpu-1",
-									Pool:   "test-pool",
-								},
-								{
-									Driver: "gpu.nvidia.com",
-									Device: "gpu-2",
-									Pool:   "test-pool",
-								},
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              "test-claim-2",
 							Namespace:         "default",
 							CreationTimestamp: metav1.Time{Time: now},
 						},
@@ -126,6 +97,43 @@ func TestGetResourceClaimInfo(t *testing.T) {
 									},
 								},
 							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device:            "gpu-1",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceReschedule"},
+										},
+										{
+											Device:            "gpu-2",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceFailed"},
+										},
+										{
+											Device:            "gpu-3",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"test"},
+										},
+									},
+								},
+								NodeSelector: &v1.NodeSelector{
+									NodeSelectorTerms: []v1.NodeSelectorTerm{
+										{
+											MatchFields: []v1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: v1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -145,7 +153,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 									Name: "gpu-1",
 									Basic: &resourceapi.BasicDevice{
 										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("1234")},
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 										},
 									},
 								},
@@ -153,7 +162,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 									Name: "gpu-2",
 									Basic: &resourceapi.BasicDevice{
 										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("5678")},
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 										},
 									},
 								},
@@ -174,27 +184,14 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name: "gpu-1",
-						},
-						{
-							Name: "gpu-2",
-						},
-					},
-				},
-				{
-					Name:              "test-claim-2",
-					Namespace:         "default",
-					NodeName:          "node1",
-					ResourceSliceName: "test-resourceslice-1",
-					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
-					Devices: []types.ResourceClaimDevice{
-						{
 							Name:  "gpu-1",
 							State: "Reschedule",
+							Model: "A100 80G",
 						},
 						{
 							Name:  "gpu-2",
 							State: "Failed",
+							Model: "A100 80G",
 						},
 						{
 							Name:  "gpu-3",
@@ -225,7 +222,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
-			result, err := GetResourceClaimInfo(context.Background(), fakeClient)
+			result, err := GetResourceClaimInfo(context.Background(), fakeClient, tc.composableDRASpec)
 
 			if tc.wantErr {
 				if err == nil {
@@ -522,7 +519,7 @@ func TestGetModelName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := getModelName(tc.composableDRASpec, tc.deviceName)
+			result, err := getModelName(tc.composableDRASpec, tc.deviceName, "")
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error but got nil")
@@ -558,14 +555,14 @@ func TestGetConfigMapInfo(t *testing.T) {
 - index: 1
   cdi-model-name: "A100 40G"
   dra-attributes:
-    - productName: "NVIDIA A100 40GB PCIe"
+    productName: "NVIDIA A100 40GB PCIe"
   label-key-model: "composable-a100-40G"
   driver-name: "gpu.nvidia.com"
   k8s-device-name: "nvidia-a100-40"
   cannot-coexist-with: [2, 3, 4]
             `,
 				"label-prefix":    "composable.fsastech.com",
-				"fabric-id-range": `[1, 2, 3]`,
+				"fabric-id-range": "[1, 2, 3]",
 			},
 			createConfigMap: true,
 			wantSpec: types.ComposableDRASpec{
@@ -573,10 +570,8 @@ func TestGetConfigMapInfo(t *testing.T) {
 					{
 						Index:        1,
 						CDIModelName: "A100 40G",
-						DRAttributes: []types.DRAttribute{
-							{
-								ProductName: "NVIDIA A100 40GB PCIe",
-							},
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 40GB PCIe",
 						},
 						LabelKeyModel:     "composable-a100-40G",
 						DriverName:        "gpu.nvidia.com",
@@ -612,13 +607,13 @@ func TestGetConfigMapInfo(t *testing.T) {
 - index: 1
   cdi-model-name: "A100 40G"
   dra-attributes:
-    - productName: "NVIDIA A100 40GB PCIe"
+    productName: "NVIDIA A100 40GB PCIe"
   label-key-model: "composable-a100-40G"
   driver-name: "gpu.nvidia.com"
   k8s-device-name: "nvidia-a100-40"
   cannot-coexist-with: [2, 3, 4]
             `,
-				"label-prefix":    "test-",
+				"label-prefix":    "composable.fsastech.com",
 				"fabric-id-range": "invalid info",
 			},
 			createConfigMap: true,
@@ -658,6 +653,175 @@ func TestGetConfigMapInfo(t *testing.T) {
 			}
 			if !reflect.DeepEqual(result, tc.wantSpec) {
 				t.Errorf("got %+v, want %+v", result, tc.wantSpec)
+			}
+		})
+	}
+}
+
+func TestHasMatchingBindingCondition(t *testing.T) {
+	trueConditionA := metav1.Condition{Type: "TypeA", Status: metav1.ConditionTrue}
+	falseConditionA := metav1.Condition{Type: "TypeA", Status: metav1.ConditionFalse}
+	trueConditionB := metav1.Condition{Type: "TypeB", Status: metav1.ConditionTrue}
+	trueConditionC := metav1.Condition{Type: "TypeC", Status: metav1.ConditionTrue}
+
+	tests := []struct {
+		name           string
+		conditions     []metav1.Condition
+		binding        []string
+		bindingFailure []string
+		expected       bool
+	}{
+		{
+			name:           "Match in bindingConditions",
+			conditions:     []metav1.Condition{trueConditionA},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{},
+			expected:       true,
+		},
+		{
+			name:           "Match in bindingFailureConditions",
+			conditions:     []metav1.Condition{trueConditionB},
+			binding:        []string{},
+			bindingFailure: []string{"TypeB"},
+			expected:       true,
+		},
+		{
+			name:           "Match in both lists",
+			conditions:     []metav1.Condition{trueConditionA},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{"TypeA"},
+			expected:       true,
+		},
+		{
+			name:           "Condition exists but wrong status",
+			conditions:     []metav1.Condition{falseConditionA},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{},
+			expected:       false,
+		},
+		{
+			name:           "No matching condition type",
+			conditions:     []metav1.Condition{trueConditionC},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{"TypeB"},
+			expected:       false,
+		},
+		{
+			name:           "Empty conditions list",
+			conditions:     []metav1.Condition{},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{"TypeB"},
+			expected:       false,
+		},
+		{
+			name:           "No binding conditions specified",
+			conditions:     []metav1.Condition{trueConditionA},
+			binding:        []string{},
+			bindingFailure: []string{},
+			expected:       false,
+		},
+		{
+			name:           "Multiple conditions with match",
+			conditions:     []metav1.Condition{falseConditionA, trueConditionB, trueConditionC},
+			binding:        []string{"TypeB"},
+			bindingFailure: []string{"TypeD"},
+			expected:       true,
+		},
+		{
+			name:           "Multiple conditions without match",
+			conditions:     []metav1.Condition{falseConditionA, trueConditionC},
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{"TypeB"},
+			expected:       false,
+		},
+		{
+			name:           "Match in bindingFailure with multiple conditions",
+			conditions:     []metav1.Condition{trueConditionA, falseConditionA, trueConditionB},
+			binding:        []string{"TypeC"},
+			bindingFailure: []string{"TypeB"},
+			expected:       true,
+		},
+		{
+			name:           "Nil conditions slice",
+			conditions:     nil,
+			binding:        []string{"TypeA"},
+			bindingFailure: []string{"TypeB"},
+			expected:       false,
+		},
+		{
+			name:           "Nil binding lists",
+			conditions:     []metav1.Condition{trueConditionA},
+			binding:        nil,
+			bindingFailure: nil,
+			expected:       false,
+		},
+		{
+			name:           "Condition in bindingFailure but status false",
+			conditions:     []metav1.Condition{falseConditionA},
+			binding:        nil,
+			bindingFailure: []string{"TypeA"},
+			expected:       false,
+		},
+		{
+			name:           "Match with duplicate in binding lists",
+			conditions:     []metav1.Condition{trueConditionA},
+			binding:        []string{"TypeA", "TypeA"},
+			bindingFailure: []string{"TypeB", "TypeA"},
+			expected:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := hasMatchingBindingCondition(
+				tt.conditions,
+				tt.binding,
+				tt.bindingFailure,
+			)
+
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v for test case: %s", tt.expected, result, tt.name)
+			}
+		})
+	}
+}
+
+func TestGetNodeName(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector v1.NodeSelector
+		expected string
+	}{
+		{
+			name: "Single node",
+			selector: v1.NodeSelector{
+				NodeSelectorTerms: []v1.NodeSelectorTerm{
+					{
+						MatchFields: []v1.NodeSelectorRequirement{
+							{
+								Key:      "metadata.name",
+								Operator: v1.NodeSelectorOpIn,
+								Values:   []string{"node1"},
+							},
+						},
+					},
+				},
+			},
+			expected: "node1",
+		},
+		{
+			name:     "No nodes",
+			selector: v1.NodeSelector{},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getNodeName(tt.selector)
+
+			if result != tt.expected {
+				t.Errorf("Expected %s, got %s", tt.expected, result)
 			}
 		})
 	}
