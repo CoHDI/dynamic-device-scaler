@@ -23,7 +23,7 @@ The following components work together to achieve dynamic scaling:
 - **k8s Scheduler**: Schedules Pods. Considers DRA device requests and determines Pod placement. Implements the DRA feature and [KEP-5007](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/5007-device-attach-before-pod-scheduled) to operate with composable devices.
 - **vendor DRA plugin**: Provides a 3rd party DRA driver as a kubelet plugin, provided by device vendors. Outputs a list of devices attached to the node as a ResourceSlice. Prepares the devices for the Pod to operate.
 - **Composable Resource Operator**: Receives device attach/detach instructions via CRs and instructs the Composable Disaggregated Infrastructure manager accordingly.
-- **Composable Disaggregated Infrastructure manager**: Manages Composable Disaggregated Infrastructure. (Note: The source code for this component is not included in InfraDDS project.)
+- **Composable Disaggregated Infrastructure manager**: Manages Composable Disaggregated Infrastructure. (Note: The source code for this component is not included in CoHDI project.)
 - **Composable DRA Driver**: Publishes available node-free devices to Kubernetes.
 - **Dynamic Device Scaler**: Instructs the Composable Resource Operator (via CRs) to scale devices based on requests of Pods.
 
