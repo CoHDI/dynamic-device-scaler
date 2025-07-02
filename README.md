@@ -7,7 +7,7 @@ Dynamic Device Scaler and Composable DRA Driver are components that enable dynam
 Composable Disaggregated Infrastructure is a new architecture that centrally manages devices such as GPUs in a pool, allowing for the flexible, software-defined configuration of Composed Baremetal, which combines servers and devices as needed. Each device and server is connected to a PCIe or CXL switch, and the control of this switch enables dynamic attachment and detachment of devices.
 This technology enables efficient device utilization by sharing expensive devices across multiple nodes, providing only the necessary resources when needed.
 
-![Composable Disaggregated Infrastructure](doc/cdi.png)
+![Composable Disaggregated Infrastructure](doc/cohdi.png)
 
 In k8s, to leverage Composable Disaggregated Infrastructure and achieve efficient device utilization, an intelligent component is required to scale devices up as needed based on workload demands, and scale them down when they are no longer required.
 Dynamic Device Scaler is the solution. It works in conjunction with k8s' DRA feature and the scheduler to issue instructions for device scaling in response to device requests from Pods.
