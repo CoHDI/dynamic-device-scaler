@@ -6,7 +6,7 @@ domain: infra.dds
 layout:
 - go.kubebuilder.io/v4
 projectName: dynamic-device-scaler
-repo: github.com/InfraDDS/dynamic-device-scaler
+repo: github.com/CoHDI/dynamic-device-scaler
 resources:
 - controller: true
   domain: infra.dds

@@ -1,4 +1,4 @@
-module github.com/InfraDDS/dynamic-device-scaler
+module github.com/CoHDI/dynamic-device-scaler
 
 go 1.24.0
 
