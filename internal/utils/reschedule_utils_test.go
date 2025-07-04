@@ -3,12 +3,12 @@ package utils
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	"github.com/stretchr/testify/assert"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -290,6 +290,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 	testCases := []struct {
 		name                      string
 		existingResourceClaimList *resourceapi.ResourceClaimList
+		existingResourceSliceList *resourceapi.ResourceSliceList
 		existingRequestList       *cdioperator.ComposabilityRequestList
 		nodeInfo                  types.NodeInfo
 		composableDRASpec         types.ComposableDRASpec
@@ -301,7 +302,6 @@ func TestRescheduleFailedNotification(t *testing.T) {
 	}{
 		{
 			name: "setDevicesState failed",
-
 			resourceClaims: []types.ResourceClaimInfo{
 				{
 					Name:              "test-claim",
@@ -310,14 +310,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 80G",
-							State: "Preparing",
+							Name:              "device-2",
+							Model:             "A100 80G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -336,6 +338,22 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					},
 				},
 			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-rs",
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu0",
+								},
+							},
+						},
+					},
+				},
+			},
 			wantErr:        true,
 			expectedErrMsg: "failed to get ResourceClaim: resourceclaims.resource.k8s.io \"test-claim\" not found",
 		},
@@ -349,14 +367,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 80G",
-							State: "Preparing",
+							Name:              "device-2",
+							Model:             "A100 80G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -375,6 +395,22 @@ func TestRescheduleFailedNotification(t *testing.T) {
 										Name:            "gpu",
 										DeviceClassName: "gpu.nvidia.com",
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-rs",
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu0",
 								},
 							},
 						},
@@ -413,14 +449,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Failed",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 80G",
-							State: "Failed",
+							Name:              "device-2",
+							Model:             "A100 80G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -436,14 +474,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-2",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -462,6 +502,25 @@ func TestRescheduleFailedNotification(t *testing.T) {
 										Name:            "gpu",
 										DeviceClassName: "gpu.nvidia.com",
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-rs",
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Devices: []resourceapi.Device{
+								{
+									Name: "device-1",
+								},
+								{
+									Name: "device-2",
 								},
 							},
 						},
@@ -500,14 +559,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Failed",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Failed",
+							Name:              "device-2",
+							Model:             "A100 40G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -523,14 +584,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-2",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -549,6 +612,25 @@ func TestRescheduleFailedNotification(t *testing.T) {
 										Name:            "gpu",
 										DeviceClassName: "gpu.nvidia.com",
 									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-rs",
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Devices: []resourceapi.Device{
+								{
+									Name: "device-1",
+								},
+								{
+									Name: "device-2",
 								},
 							},
 						},
@@ -602,14 +684,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Failed",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Failed",
+							Name:              "device-2",
+							Model:             "A100 40G",
+							State:             "Failed",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -625,14 +709,16 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-1",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 						{
-							Name:  "device-2",
-							Model: "A100 40G",
-							State: "Preparing",
+							Name:              "device-2",
+							Model:             "A100 40G",
+							State:             "Preparing",
+							ResourceSliceName: "test-rs",
 						},
 					},
 				},
@@ -646,6 +732,25 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name:  "device-1",
 							Model: "A100 80G",
 							State: "Preparing",
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-rs",
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Devices: []resourceapi.Device{
+								{
+									Name: "device-1",
+								},
+								{
+									Name: "device-2",
+								},
+							},
 						},
 					},
 				},
@@ -706,6 +811,11 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					clientObjects = append(clientObjects, &tc.existingResourceClaimList.Items[i])
 				}
 			}
+			if tc.existingResourceSliceList != nil {
+				for i := range tc.existingResourceSliceList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceSliceList.Items[i])
+				}
+			}
 			if tc.existingRequestList != nil {
 				for i := range tc.existingRequestList.Items {
 					clientObjects = append(clientObjects, &tc.existingRequestList.Items[i])
@@ -716,7 +826,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
 			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
-			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).WithStatusSubresource(&resourceapi.ResourceClaim{}).Build()
 
 			result, err := RescheduleFailedNotification(context.Background(), fakeClient, tc.nodeInfo, tc.resourceClaims, tc.resourceSlices, tc.composableDRASpec)
 
@@ -732,9 +842,8 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
-				t.Errorf("resourceclaim infos are incorrect. Got: %v, Want: %v", result, tc.expectedResourceClaims)
-			}
+
+			assert.ElementsMatch(t, result, tc.expectedResourceClaims)
 		})
 	}
 }
@@ -890,7 +999,7 @@ func TestRescheduleNotification(t *testing.T) {
 			s := scheme.Scheme
 			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
-			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).WithStatusSubresource(&resourceapi.ResourceClaim{}).Build()
 
 			result, err := RescheduleNotification(context.Background(), fakeClient, tc.resourceClaimInfos, tc.resourceSliceInfos, tc.labelPrefix, tc.deviceNoAllocation)
 
@@ -906,9 +1015,7 @@ func TestRescheduleNotification(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !reflect.DeepEqual(result, tc.expectedResourceClaims) {
-				t.Errorf("resourceclaim infos are incorrect. Got: %v, Want: %v", result, tc.expectedResourceClaims)
-			}
+			assert.ElementsMatch(t, result, tc.expectedResourceClaims)
 		})
 	}
 }

@@ -83,7 +83,7 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	reqLogger.Info("Reconcile completed successfully", "ScanInterval", r.ScanInterval, "DeviceNoRemoval", r.DeviceNoRemoval, "DeviceNoAllocation", r.DeviceNoAllocation)
+	reqLogger.Info("Test info", "ScanInterval", r.ScanInterval, "DeviceNoRemoval", r.DeviceNoRemoval, "DeviceNoAllocation", r.DeviceNoAllocation)
 
 	return ctrl.Result{RequeueAfter: r.ScanInterval}, err
 }

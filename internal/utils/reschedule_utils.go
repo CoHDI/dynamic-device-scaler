@@ -10,6 +10,8 @@ import (
 
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	resourceapi "k8s.io/api/resource/v1beta1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,10 +33,10 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start RescheduleFailedNotification")
 
-	logger.Info("len", "resourceClaimInfos", len(resourceClaimInfos))
-	logger.Info("info", "resourceClaimInfos", resourceClaimInfos)
-	logger.Info("len", "resourceSliceInfos", len(resourceSliceInfos))
-	logger.Info("info", "resourceSliceInfos", resourceSliceInfos)
+	logger.Info("Test info", "resourceClaimInfos", resourceClaimInfos)
+	logger.Info("Test info", "resourceSliceInfos", resourceSliceInfos)
+	logger.Info("Test info", "nodeInfos", node)
+	logger.Info("Test info", "composableDRASpec", composableDRASpec)
 
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
@@ -57,6 +59,21 @@ outerLoop:
 						}
 						continue outerLoop
 					}
+				}
+			}
+
+			resourceSlice := &resourceapi.ResourceSlice{}
+			if err := kubeClient.Get(ctx, k8stypes.NamespacedName{Name: rcDevice.ResourceSliceName}, resourceSlice); err != nil {
+				return resourceClaimInfos, err
+			}
+			for _, resourceSliceDevice := range resourceSlice.Spec.Devices {
+				if rcDevice.Name == resourceSliceDevice.Name {
+					break
+				}
+
+				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+				if err != nil {
+					return resourceClaimInfos, err
 				}
 			}
 
@@ -132,17 +149,14 @@ func RescheduleNotification(ctx context.Context, kubeClient client.Client, resou
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start RescheduleNotification")
 
-	logger.Info("len", "resourceClaimInfos", len(resourceClaimInfos))
-	logger.Info("info", "resourceClaimInfos", resourceClaimInfos)
-	logger.Info("len", "resourceSliceInfos", len(resourceSliceInfos))
-	logger.Info("info", "resourceSliceInfos", resourceSliceInfos)
+	logger.Info("Test info", "resourceClaimInfos", resourceClaimInfos)
+	logger.Info("Test info", "resourceSliceInfos", resourceSliceInfos)
 
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, fmt.Errorf("failed to list composableResourceList: %v", err)
 	}
 
-	//TODO:
 	if len(resourceList.Items) == 0 {
 		logger.Info("No ComposableResource found, skipping reschedule notification")
 		return resourceClaimInfos, nil
@@ -171,6 +185,7 @@ OuterLoop:
 							if isUsed {
 								continue
 							}
+							logger.Info("Test info", "RescheduleNotification", "not used by pod")
 
 							isOvertime, err := isLastUsedOverTime(resource, labelPrefix, deviceNoAllocation)
 							if err != nil {
@@ -179,6 +194,7 @@ OuterLoop:
 							if !isOvertime {
 								continue
 							}
+							logger.Info("Test info", "RescheduleNotification", "overtime")
 
 							resourceMatched[resource.Name] = true
 							matchedCount++

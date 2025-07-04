@@ -7,12 +7,12 @@ type ResourceClaimInfo struct {
 	NodeName          string                `json:"node_name"`
 	CreationTimestamp v1.Time               `json:"creation_timestamp"`
 	Namespace         string                `json:"namespace"`
-	ResourceSliceName string                `json:"resource_slice_name"`
 	Devices           []ResourceClaimDevice `json:"devices"`
 }
 
 type ResourceClaimDevice struct {
-	Name  string `json:"name"`
-	Model string `json:"model"`
-	State string `json:"state"`
+	Name              string `json:"name"`
+	Model             string `json:"model"`
+	State             string `json:"state"`
+	ResourceSliceName string `json:"resource_slice_name"`
 }

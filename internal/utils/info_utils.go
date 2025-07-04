@@ -38,18 +38,13 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 		}
 
 		var resourceClaimInfo types.ResourceClaimInfo
-		resourceClaimInfo.Name = rc.Name
-		resourceClaimInfo.Namespace = rc.Namespace
-		resourceClaimInfo.CreationTimestamp = rc.ObjectMeta.CreationTimestamp
-		if rc.Status.Allocation.NodeSelector != nil {
-			resourceClaimInfo.NodeName = getNodeName(*rc.Status.Allocation.NodeSelector)
-		}
 
 		for _, device := range rc.Status.Allocation.Devices.Results {
 			if len(device.BindingConditions) == 0 {
 				continue
 			}
 			var deviceInfo types.ResourceClaimDevice
+
 			deviceInfo.Name = device.Device
 
 		ResourceSliceLoop:
@@ -63,6 +58,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 								return nil, err
 							}
 							deviceInfo.Model = model
+							deviceInfo.ResourceSliceName = rs.Name
 							break ResourceSliceLoop
 						}
 					}
@@ -72,7 +68,6 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 			if len(rc.Status.Devices) == 0 {
 				deviceInfo.State = "Preparing"
 			} else {
-				//TODO
 				for _, deivedeviceInfo := range rc.Status.Devices {
 					if deivedeviceInfo.Device == device.Device {
 						if deivedeviceInfo.Conditions != nil {
@@ -93,6 +88,13 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 
 		if len(resourceClaimInfo.Devices) == 0 {
 			continue
+		}
+
+		resourceClaimInfo.Name = rc.Name
+		resourceClaimInfo.Namespace = rc.Namespace
+		resourceClaimInfo.CreationTimestamp = rc.ObjectMeta.CreationTimestamp
+		if rc.Status.Allocation.NodeSelector != nil {
+			resourceClaimInfo.NodeName = getNodeName(*rc.Status.Allocation.NodeSelector)
 		}
 
 		resourceClaimInfoList = append(resourceClaimInfoList, resourceClaimInfo)

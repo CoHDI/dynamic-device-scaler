@@ -350,6 +350,45 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 			namespace:         "default",
 			conditionType:     "FabricDeviceReschedule",
 		},
+		{
+			name: "device not exist",
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "resource1",
+							Namespace: "default",
+						},
+						Spec: resourceapi.ResourceClaimSpec{
+							Devices: resourceapi.DeviceClaim{
+								Requests: []resourceapi.DeviceRequest{
+									{
+										Name:            "gpu",
+										DeviceClassName: "gpu.nvidia.com",
+									},
+								},
+							},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "gpu-0",
+											Driver: "gpu.nvidia.com",
+											Pool:   "k8s-dra-driver",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceClaimName: "resource1",
+			namespace:         "default",
+			conditionType:     "FabricDeviceReschedule",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -363,7 +402,7 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 
 			s := scheme.Scheme
 
-			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).WithStatusSubresource(&resourceapi.ResourceClaim{}).Build()
 
 			err := PatchResourceClaimDeviceConditions(context.Background(), fakeClient, tc.resourceClaimName, tc.namespace, tc.conditionType)
 
