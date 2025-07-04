@@ -2,15 +2,15 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: infra.dds
+domain: co.hdi
 layout:
 - go.kubebuilder.io/v4
 projectName: dynamic-device-scaler
 repo: github.com/CoHDI/dynamic-device-scaler
 resources:
 - controller: true
-  domain: infra.dds
-  group: infra.dds
+  domain: co.hdi
+  group: co.hdi
   kind: ResourceMonitor
   version: v1alpha1
 version: "3"
