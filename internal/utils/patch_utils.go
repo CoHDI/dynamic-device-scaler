@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
-	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +106,7 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 					Name: resourceName,
 				},
 			},
-			client.RawPatch(k8stypes.StrategicMergePatchType, patchBytes),
+			client.RawPatch(k8stypes.MergePatchType, patchBytes),
 		)
 
 		if err == nil {
@@ -189,15 +189,30 @@ func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.C
 			return fmt.Errorf("failed to get ResourceClaim: %v", err)
 		}
 
-		modifiedRC := existingRC.DeepCopy()
+		if len(existingRC.Status.Devices) == 0 && existingRC.Status.Allocation != nil && len(existingRC.Status.Allocation.Devices.Results) > 0 {
+			for _, allocationDevice := range existingRC.Status.Allocation.Devices.Results {
+				device := &resourceapi.AllocatedDeviceStatus{
+					Driver: allocationDevice.Driver,
+					Device: allocationDevice.Device,
+					Pool:   allocationDevice.Pool,
+				}
+				existingRC.Status.Devices = append(existingRC.Status.Devices, *device)
+			}
+		}
 
-		for i := range modifiedRC.Status.Devices {
-			device := &modifiedRC.Status.Devices[i]
+		if len(existingRC.Status.Devices) == 0 {
+			logger.V(1).Info("No devices found in ResourceClaim status, skipping patch")
+			return nil
+		}
 
+		for i := range existingRC.Status.Devices {
+			device := &existingRC.Status.Devices[i]
 			newCondition := metav1.Condition{
 				Type:               conditionType,
 				Status:             metav1.ConditionTrue,
 				LastTransitionTime: metav1.NewTime(time.Now()),
+				Reason:             "DeviceConditionUpdated",
+				Message:            fmt.Sprintf("Device %s condition %s updated", device.Device, conditionType),
 			}
 
 			conditionExists := false
@@ -216,14 +231,26 @@ func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.C
 			}
 		}
 
-		patch := client.StrategicMergeFrom(existingRC.DeepCopy())
-		if err := kubeClient.Patch(ctx, modifiedRC, patch); err != nil {
+		patchData := map[string]interface{}{
+			"status": map[string]interface{}{
+				"devices": existingRC.Status.Devices,
+			},
+		}
+		patchBytes, err := json.Marshal(patchData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal patch: %v", err)
+		}
+
+		err = kubeClient.Status().Patch(ctx, existingRC, client.RawPatch(k8stypes.MergePatchType, patchBytes))
+		if err != nil {
 			if apierrors.IsConflict(err) {
 				lastErr = err
 				continue
 			}
 			return fmt.Errorf("failed to patch ResourceClaim status: %v", err)
 		}
+
+		logger.V(1).Info("Successfully patched device conditions")
 		return nil
 	}
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
@@ -285,6 +312,8 @@ func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet ku
 			deleteLabels = append(deleteLabels, label)
 		}
 	}
+
+	logger.V(1).Info("Start patch Node label", "add labels", addLabels, "delete labels", deleteLabels)
 
 	return patchNodeLabel(clientSet, nodeName, addLabels, deleteLabels)
 }

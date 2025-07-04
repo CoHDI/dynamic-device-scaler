@@ -3,18 +3,19 @@ package utils
 import (
 	"context"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
-	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	"github.com/CoHDI/dynamic-device-scaler/internal/types"
+	"github.com/stretchr/testify/assert"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -120,13 +121,13 @@ func TestGetResourceClaimInfo(t *testing.T) {
 										},
 									},
 								},
-								NodeSelector: &v1.NodeSelector{
-									NodeSelectorTerms: []v1.NodeSelectorTerm{
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
 										{
-											MatchFields: []v1.NodeSelectorRequirement{
+											MatchFields: []corev1.NodeSelectorRequirement{
 												{
 													Key:      "metadata.name",
-													Operator: v1.NodeSelectorOpIn,
+													Operator: corev1.NodeSelectorOpIn,
 													Values:   []string{"node1"},
 												},
 											},
@@ -180,18 +181,19 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					Name:              "test-claim-1",
 					Namespace:         "default",
 					NodeName:          "node1",
-					ResourceSliceName: "test-resourceslice-1",
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "gpu-1",
-							State: "Reschedule",
-							Model: "A100 80G",
+							Name:              "gpu-1",
+							State:             "Reschedule",
+							Model:             "A100 80G",
+							ResourceSliceName: "test-resourceslice-1",
 						},
 						{
-							Name:  "gpu-2",
-							State: "Failed",
-							Model: "A100 80G",
+							Name:              "gpu-2",
+							State:             "Failed",
+							Model:             "A100 80G",
+							ResourceSliceName: "test-resourceslice-1",
 						},
 						{
 							Name:  "gpu-3",
@@ -200,6 +202,540 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "resourceClaim with empty reservedFor",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-claim-1",
+							Namespace:         "default",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{},
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-1",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "FabricDeviceReschedule",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-2",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "FabricDeviceFailed",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-3",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "test-condition",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device:            "gpu-1",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceReschedule"},
+										},
+										{
+											Device:            "gpu-2",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceFailed"},
+										},
+										{
+											Device:            "gpu-3",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"test"},
+										},
+									},
+								},
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchFields: []corev1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: corev1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "device without binding conditions",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-claim-1",
+							Namespace:         "default",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Resource: "pods",
+									Name:     "test-pod-1",
+									UID:      "1234",
+								},
+							},
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-0",
+									Pool:   "test-pool",
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-1",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "FabricDeviceReschedule",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-2",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "FabricDeviceFailed",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Device: "gpu-3",
+									Pool:   "test-pool",
+									Conditions: []metav1.Condition{
+										{
+											Type:   "test-condition",
+											Status: metav1.ConditionTrue,
+										},
+									},
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "gpu-1",
+											Driver: "gpu.nvidia.com",
+											Pool:   "test-pool",
+										},
+										{
+											Device: "gpu-2",
+											Driver: "gpu.nvidia.com",
+											Pool:   "test-pool",
+										},
+										{
+											Device: "gpu-3",
+											Driver: "gpu.nvidia.com",
+											Pool:   "test-pool",
+										},
+									},
+								},
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchFields: []corev1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: corev1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resourceClaim with empty Status.Devices",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-claim-1",
+							Namespace:         "default",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Resource: "pods",
+									Name:     "test-pod-1",
+									UID:      "1234",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device:            "gpu-1",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceReschedule"},
+										},
+										{
+											Device:            "gpu-2",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceFailed"},
+										},
+										{
+											Device:            "gpu-3",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"test"},
+										},
+									},
+								},
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchFields: []corev1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: corev1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
+			expectedResourceClaimInfo: []types.ResourceClaimInfo{
+				{
+					Name:              "test-claim-1",
+					Namespace:         "default",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:              "gpu-1",
+							State:             "Preparing",
+							Model:             "A100 80G",
+							ResourceSliceName: "test-resourceslice-1",
+						},
+						{
+							Name:              "gpu-2",
+							State:             "Preparing",
+							Model:             "A100 80G",
+							ResourceSliceName: "test-resourceslice-1",
+						},
+						{
+							Name:  "gpu-3",
+							State: "Preparing",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "resourceSlice with error model",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 80GB",
+						},
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-claim-1",
+							Namespace:         "default",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Resource: "pods",
+									Name:     "test-pod-1",
+									UID:      "1234",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device:            "gpu-1",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceReschedule"},
+										},
+										{
+											Device:            "gpu-2",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceFailed"},
+										},
+										{
+											Device:            "gpu-3",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"test"},
+										},
+									},
+								},
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchFields: []corev1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: corev1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA Test")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA Test")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "unknown device name:",
 		},
 	}
 
@@ -228,14 +764,11 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
-			if !reflect.DeepEqual(result, tc.expectedResourceClaimInfo) {
-				t.Errorf("Unexpected ResourceClaim info. Got: %v, Want: %v", result, tc.expectedResourceClaimInfo)
-			}
+
+			assert.ElementsMatch(t, result, tc.expectedResourceClaimInfo)
 		})
 	}
 }
@@ -249,6 +782,43 @@ func TestGetResourceSliceInfo(t *testing.T) {
 		wantErr                   bool
 		expectedErrMsg            string
 	}{
+		{
+			name: "resourceSlice with binding conditions",
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-0",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid": {StringValue: ptr.To("1234")},
+										},
+										BindingConditions: []string{"test"},
+									},
+								},
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid": {StringValue: ptr.To("5678")},
+										},
+										BindingConditions: []string{"test"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		{
 			name: "normal case",
 			existingResourceSliceList: &resourceapi.ResourceSliceList{
@@ -328,9 +898,25 @@ func TestGetResourceSliceInfo(t *testing.T) {
 				}
 				return
 			}
-			if !reflect.DeepEqual(result, tc.expectedResourceSliceInfo) {
-				t.Errorf("Expected ResourceSlice info. Got: %v, Want: %v", result, tc.expectedResourceSliceInfo)
+
+			assert.ElementsMatch(t, result, tc.expectedResourceSliceInfo)
+		})
+	}
+}
+
+func sortNodeInfos(nis []types.NodeInfo) {
+	sort.Slice(nis, func(i, j int) bool {
+		return nis[i].Name < nis[j].Name
+	})
+
+	for idx := range nis {
+		sort.Slice(nis[idx].Models, func(i, j int) bool {
+			a := nis[idx].Models[i]
+			b := nis[idx].Models[j]
+			if a.Model != b.Model {
+				return a.Model < b.Model
 			}
+			return a.DeviceName < b.DeviceName
 		})
 	}
 }
@@ -416,7 +1002,7 @@ func TestGetNodeInfo(t *testing.T) {
 			expectedErrMsg: "unknown device name: nvidia-a100-80g",
 		},
 		{
-			name: "invalid integer",
+			name: "node label with invalid integer",
 			composableDRASpec: types.ComposableDRASpec{
 				LabelPrefix: "composable.fsastech.com",
 				DeviceInfos: []types.DeviceInfo{
@@ -443,7 +1029,155 @@ func TestGetNodeInfo(t *testing.T) {
 				},
 			},
 			wantErr:        true,
-			expectedErrMsg: "invalid integer in ss: strconv.Atoi: parsing \"ss\": invalid syntax",
+			expectedErrMsg: "invalid integer in ss: strconv.Atoi:",
+		},
+		{
+			name: "node without expected prefix label",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"test/nvidia-a100-80g":          "true",
+								"test/fabric":                   "123",
+								"test/nvidia-a100-80g-size-min": "2",
+								"test/nvidia-a100-80g-size-max": "6",
+							},
+						},
+					},
+				},
+			},
+			expectedNodeInfos: []types.NodeInfo{
+				{
+					Name: "node1",
+				},
+			},
+		},
+		{
+			name: "node with error max info label",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "0",
+								"composable.fsastech.com/nvidia-a100-80g-size-max": "ss",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "invalid integer in ss: strconv.Atoi: ",
+		},
+		{
+			name: "node with error model info label",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "0",
+								"composable.fsastech.com/nvidia-a100-40g-size-max": "5",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "unknown device name:",
+		},
+		{
+			name: "multiple sets of label",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+					{
+						Index:         2,
+						CDIModelName:  "A100 40G",
+						K8sDeviceName: "nvidia-a100-40g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/nvidia-a100-40g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "2",
+								"composable.fsastech.com/nvidia-a100-80g-size-max": "6",
+								"composable.fsastech.com/nvidia-a100-40g-size-max": "5",
+								"composable.fsastech.com/nvidia-a100-40g-size-min": "1",
+							},
+						},
+					},
+				},
+			},
+			expectedNodeInfos: []types.NodeInfo{
+				{
+					Name: "node1",
+					Models: []types.ModelConstraints{
+						{
+							Model:      "A100 80G",
+							DeviceName: "nvidia-a100-80g",
+							MinDevice:  2,
+							MaxDevice:  6,
+						},
+						{
+							Model:      "A100 40G",
+							DeviceName: "nvidia-a100-40g",
+							MinDevice:  1,
+							MaxDevice:  5,
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -461,17 +1195,18 @@ func TestGetNodeInfo(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.ErrorContains(t, err, tc.expectedErrMsg)
 				return
 			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
+			sortNodeInfos(result)
+			sortNodeInfos(tc.expectedNodeInfos)
+
 			if !reflect.DeepEqual(result, tc.expectedNodeInfos) {
-				t.Errorf("NodeInfos are incorrect. Got: %v, Want: %v", result, tc.expectedNodeInfos)
+				t.Errorf("Expected node infos %v, got %v", tc.expectedNodeInfos, result)
 			}
 		})
 	}
@@ -789,18 +1524,18 @@ func TestHasMatchingBindingCondition(t *testing.T) {
 func TestGetNodeName(t *testing.T) {
 	tests := []struct {
 		name     string
-		selector v1.NodeSelector
+		selector corev1.NodeSelector
 		expected string
 	}{
 		{
 			name: "Single node",
-			selector: v1.NodeSelector{
-				NodeSelectorTerms: []v1.NodeSelectorTerm{
+			selector: corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
 					{
-						MatchFields: []v1.NodeSelectorRequirement{
+						MatchFields: []corev1.NodeSelectorRequirement{
 							{
 								Key:      "metadata.name",
-								Operator: v1.NodeSelectorOpIn,
+								Operator: corev1.NodeSelectorOpIn,
 								Values:   []string{"node1"},
 							},
 						},
@@ -811,7 +1546,7 @@ func TestGetNodeName(t *testing.T) {
 		},
 		{
 			name:     "No nodes",
-			selector: v1.NodeSelector{},
+			selector: corev1.NodeSelector{},
 			expected: "",
 		},
 	}

@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/InfraDDS/dynamic-device-scaler/test/utils"
+	"github.com/CoHDI/dynamic-device-scaler/test/utils"
 )
 
 // namespace where the project is deployed in

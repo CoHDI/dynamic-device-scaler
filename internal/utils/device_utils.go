@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
-	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,21 +17,19 @@ func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, mod
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start getting configured device count")
 
-	preparingDeviceCount := getPreparingDevicesCount(resourceClaimInfos, model, nodeName)
+	preparingAndRescheduleDeviceCount := getPreparingRescheduleDevicesCount(resourceClaimInfos, model, nodeName)
 
 	podAllocatedDevicesCount, err := getPodAllocatedDevicesCount(ctx, kubeClient, model, nodeName, resourceSliceInfos)
 	if err != nil {
 		return 0, err
 	}
 
-	rescheduleDeviceCount := getRescheduleDevicesCount(resourceClaimInfos, model, nodeName)
+	logger.V(1).Info("Finish getting configured device count", "preparingAndRescheduleDeviceCount", preparingAndRescheduleDeviceCount, "podAllocatedDevicesCount", podAllocatedDevicesCount)
 
-	logger.V(1).Info("Finish getting configured device count", "preparingDeviceCount", preparingDeviceCount, "podAllocatedDevicesCount", podAllocatedDevicesCount, "rescheduleDeviceCount", rescheduleDeviceCount)
-
-	return preparingDeviceCount + podAllocatedDevicesCount + rescheduleDeviceCount, nil
+	return preparingAndRescheduleDeviceCount + podAllocatedDevicesCount, nil
 }
 
-func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
+func getPreparingRescheduleDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
 	var count int64
 
 	for _, rc := range resourceClaimInfos {
@@ -39,7 +37,7 @@ func getPreparingDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, mode
 			continue
 		}
 		for _, device := range rc.Devices {
-			if device.Model == model && device.State == "Preparing" {
+			if device.Model == model && (device.State == "Preparing" || device.State == "Reschedule") {
 				count++
 			}
 		}
@@ -77,23 +75,6 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 	}
 
 	return count, nil
-}
-
-func getRescheduleDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
-	var count int64
-
-	for _, rc := range resourceClaimInfos {
-		if rc.NodeName != nodeName {
-			continue
-		}
-		for _, device := range rc.Devices {
-			if device.Model == model && device.State == "Reschedule" {
-				count++
-			}
-		}
-	}
-
-	return count
 }
 
 func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceName string, resourceSliceInfo types.ResourceSliceInfo) (bool, error) {

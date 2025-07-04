@@ -22,23 +22,14 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - command:
+      - name: dynamic-device-scaler
+        image: localhost/dynamic-device-scaler:latest
+        command:
         - /dynamic-device-scaler
-        args:
-          - --leader-elect
-          - --health-probe-bind-address=:8081
-        image: controller:latest
-        name: dynamic-device-scaler
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - "ALL"
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-      serviceAccountName: controller-manager
+      serviceAccountName: dds-controller-manager
       terminationGracePeriodSeconds: 10

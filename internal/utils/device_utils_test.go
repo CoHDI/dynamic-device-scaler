@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
-	"github.com/InfraDDS/dynamic-device-scaler/internal/types"
+	"github.com/stretchr/testify/assert"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +30,359 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 		wantErr                        bool
 		expectedErrMsg                 string
 	}{
+		{
+			name: "failed to list composableResourceList",
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "claim1",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device1",
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device2",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod1",
+									Resource: "pods",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "device1",
+											Pool:   "test",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name:   "rs1",
+					Driver: "gpu.nvidia.com",
+					Pool:   "test",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "device1",
+							UUID: "123",
+						},
+						{
+							Name: "device2",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfos: []types.ResourceClaimInfo{
+				{
+					Name:     "rs1",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "GPU2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs2",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU4",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs3",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU5",
+							Model: "A100 40G",
+							State: "Reschedule",
+						},
+					},
+				},
+			},
+			model:          "A100 40G",
+			nodeName:       "node1",
+			wantErr:        true,
+			expectedErrMsg: "failed to list composableResourceList:",
+		},
+		{
+			name: "resourceClaim and nodeName do not match",
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource1",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource2",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node2",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource3",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Failed",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "claim1",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device1",
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device2",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod1",
+									Resource: "pods",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "device1",
+											Pool:   "test",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name:   "rs1",
+					Driver: "gpu.nvidia.com",
+					Pool:   "test",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "device1",
+							UUID: "123",
+						},
+						{
+							Name: "device2",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfos: []types.ResourceClaimInfo{
+				{
+					Name:     "rs1",
+					NodeName: "node2",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "GPU2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs2",
+					NodeName: "node2",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU4",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs3",
+					NodeName: "node2",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU5",
+							Model: "A100 40G",
+							State: "Reschedule",
+						},
+					},
+				},
+			},
+			model:          "A100 40G",
+			nodeName:       "node1",
+			expectedResult: 1,
+		},
+		{
+			name: "pod allocated devices is 0",
+			existingResourceClaim: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "claim1",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device1",
+								},
+								{
+									Driver: "gpu.nvidia.com",
+									Pool:   "test",
+									Device: "device2",
+								},
+							},
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Name:     "pod1",
+									Resource: "pods",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device: "device1",
+											Pool:   "test",
+											Driver: "gpu.nvidia.com",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name:   "rs1",
+					Driver: "gpu.nvidia.com",
+					Pool:   "test",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "device1",
+							UUID: "123",
+						},
+						{
+							Name: "device2",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfos: []types.ResourceClaimInfo{
+				{
+					Name:     "rs1",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "GPU2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs2",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU4",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs3",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU5",
+							Model: "A100 40G",
+							State: "Reschedule",
+						},
+					},
+				},
+			},
+			model:          "A100 40G",
+			nodeName:       "node1",
+			expectedResult: 3,
+		},
 		{
 			name: "normal case",
 			existingComposableResourceList: &cdioperator.ComposableResourceList{
@@ -179,20 +533,20 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			s := scheme.Scheme
+
 			clientObjects := []runtime.Object{}
 			if tc.existingComposableResourceList != nil {
 				for i := range tc.existingComposableResourceList.Items {
 					clientObjects = append(clientObjects, &tc.existingComposableResourceList.Items[i])
 				}
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 			}
 			if tc.existingResourceClaim != nil {
 				for i := range tc.existingResourceClaim.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceClaim.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -202,9 +556,7 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 
@@ -438,6 +790,68 @@ func TestDynamicDetach(t *testing.T) {
 			expectedSize: 3,
 		},
 		{
+			name:            "nextSize greater than composabilityRequest size",
+			deviceNoRemoval: time.Minute,
+			count:           3,
+			nodeName:        "node1",
+			labelPrefix:     "composable.test",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "res1",
+							Annotations: map[string]string{
+								"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+				},
+			},
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       1,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       1,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			expectedSize: 1,
+		},
+		{
 			name: "count less than resourceCount",
 
 			deviceNoRemoval: time.Minute,
@@ -504,25 +918,89 @@ func TestDynamicDetach(t *testing.T) {
 			},
 			expectedSize: 2,
 		},
+		{
+			name:            "failed to get next size",
+			deviceNoRemoval: time.Minute,
+			count:           3,
+			nodeName:        "node1",
+			labelPrefix:     "composable.test",
+			existingComposableResource: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "res1",
+							Annotations: map[string]string{
+								"composable.test/last-used-time": "test",
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Online"},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "res2",
+							DeletionTimestamp: &metav1.Time{Time: thirtySecondsAgo},
+							Finalizers:        []string{"dummy-finalizer"},
+						},
+						Status: cdioperator.ComposableResourceStatus{State: "Attaching"},
+					},
+				},
+			},
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       4,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "failed to get next size:",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
+			s := scheme.Scheme
 			if tc.existingComposabilityRequest != nil {
 				for i := range tc.existingComposabilityRequest.Items {
 					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
 				}
 			}
 			if tc.existingComposableResource != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+
 				for i := range tc.existingComposableResource.Items {
 					clientObjects = append(clientObjects, &tc.existingComposableResource.Items[i])
 				}
 			}
 
-			s := scheme.Scheme
 			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -532,9 +1010,7 @@ func TestDynamicDetach(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 
@@ -611,7 +1087,6 @@ func TestIsDeviceResourceSliceRed(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			result, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(tc.deviceID, tc.resourceSliceInfos)
 			if result != tc.expectedResult {
 				t.Errorf("Expected result %v, got %v", tc.expectedResult, result)
@@ -623,6 +1098,174 @@ func TestIsDeviceResourceSliceRed(t *testing.T) {
 
 			if deviceName != tc.expectedDeviceName {
 				t.Errorf("Expected deviceName %q, got %q", tc.expectedDeviceName, deviceName)
+			}
+		})
+	}
+}
+
+func TestIsDeviceUsedByPod(t *testing.T) {
+	testCases := []struct {
+		name                      string
+		deviceName                string
+		resourceSliceInfo         types.ResourceSliceInfo
+		existingResourceClaimList *resourceapi.ResourceClaimList
+		expectedResult            bool
+		wantErr                   bool
+		expectedErrMsg            string
+	}{
+		{
+			name:       "empty resource claim list",
+			deviceName: "gpu0",
+			resourceSliceInfo: types.ResourceSliceInfo{
+				Name: "rs0",
+				Devices: []types.ResourceSliceDevice{
+					{
+						Name: "gpu0",
+						UUID: "123",
+					},
+				},
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{},
+			expectedResult:            false,
+			wantErr:                   false,
+		},
+		{
+			name:       "device used by pod",
+			deviceName: "gpu0",
+			resourceSliceInfo: types.ResourceSliceInfo{
+				Name: "rs0",
+				Devices: []types.ResourceSliceDevice{
+					{
+						Name: "gpu0",
+						UUID: "123",
+					},
+				},
+				Pool:   "gpu-pool",
+				Driver: "nvidia",
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "claim1",
+							Namespace: "default",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Driver: "nvidia",
+											Pool:   "gpu-pool",
+											Device: "gpu0",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: true,
+			wantErr:        false,
+		},
+		{
+			name:       "device not used by pod",
+			deviceName: "gpu1",
+			resourceSliceInfo: types.ResourceSliceInfo{
+				Name: "rs0",
+				Devices: []types.ResourceSliceDevice{
+					{
+						Name: "gpu1",
+						UUID: "123",
+					},
+				},
+				Pool:   "gpu-pool",
+				Driver: "nvidia",
+			},
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "claim1",
+							Namespace: "default",
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Driver: "nvidia",
+											Pool:   "gpu-pool",
+											Device: "gpu0",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: false,
+			wantErr:        false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			clientObjects := []runtime.Object{}
+			s := scheme.Scheme
+			if tc.existingResourceClaimList != nil {
+				for i := range tc.existingResourceClaimList.Items {
+					clientObjects = append(clientObjects, &tc.existingResourceClaimList.Items[i])
+				}
+			}
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			result, err := IsDeviceUsedByPod(context.Background(), fakeClient, tc.deviceName, tc.resourceSliceInfo)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result != tc.expectedResult {
+				t.Errorf("Expected result %v, got %v", tc.expectedResult, result)
+			}
+		})
+	}
+}
+
+func TestGetDriverType(t *testing.T) {
+	testcase := []struct {
+		name           string
+		model          string
+		expectedResult string
+	}{
+		{
+			name:           "gpu model",
+			model:          "gpu.nvidia.com",
+			expectedResult: "gpu",
+		},
+		{
+			name:           "other model",
+			model:          "test",
+			expectedResult: "",
+		},
+	}
+
+	for _, tc := range testcase {
+		t.Run(tc.name, func(t *testing.T) {
+			result := GetDriverType(tc.model)
+			if result != tc.expectedResult {
+				t.Errorf("Expected result %s, go %s", tc.expectedResult, result)
 			}
 		})
 	}
