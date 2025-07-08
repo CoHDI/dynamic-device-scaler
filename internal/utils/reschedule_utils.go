@@ -33,11 +33,6 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start RescheduleFailedNotification")
 
-	logger.Info("Test info", "resourceClaimInfos", resourceClaimInfos)
-	logger.Info("Test info", "resourceSliceInfos", resourceSliceInfos)
-	logger.Info("Test info", "nodeInfos", node)
-	logger.Info("Test info", "composableDRASpec", composableDRASpec)
-
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := kubeClient.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, err
@@ -50,6 +45,9 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 outerLoop:
 	for k, rc := range resourceClaimInfos {
 		for i, rcDevice := range rc.Devices {
+			if rcDevice.State != "Preparing" {
+				continue outerLoop
+			}
 			for j, otherDevice := range rc.Devices {
 				if i != j && rcDevice.Model != otherDevice.Model {
 					if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model, composableDRASpec) {
@@ -66,46 +64,48 @@ outerLoop:
 			if err := kubeClient.Get(ctx, k8stypes.NamespacedName{Name: rcDevice.ResourceSliceName}, resourceSlice); err != nil {
 				return resourceClaimInfos, err
 			}
+			exit := false
 			for _, resourceSliceDevice := range resourceSlice.Spec.Devices {
 				if rcDevice.Name == resourceSliceDevice.Name {
+					exit = true
 					break
 				}
-
+			}
+			if !exit {
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 				if err != nil {
 					return resourceClaimInfos, err
 				}
+				continue outerLoop
 			}
 
-			if rcDevice.State == "Preparing" {
-				for _, composabilityRequest := range composabilityRequestList.Items {
-					if composabilityRequest.Spec.Resource.Size > 0 &&
-						composabilityRequest.Spec.Resource.TargetNode == rc.NodeName {
-						if !isDeviceCoexistence(rcDevice.Model, composabilityRequest.Spec.Resource.Model, composableDRASpec) {
-							resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-							if err != nil {
-								return resourceClaimInfos, err
-							}
-							continue outerLoop
+			for _, composabilityRequest := range composabilityRequestList.Items {
+				if composabilityRequest.Spec.Resource.Size > 0 &&
+					composabilityRequest.Spec.Resource.TargetNode == rc.NodeName {
+					if !isDeviceCoexistence(rcDevice.Model, composabilityRequest.Spec.Resource.Model, composableDRASpec) {
+						resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+						if err != nil {
+							return resourceClaimInfos, err
 						}
+						continue outerLoop
 					}
 				}
+			}
 
-				for i, rc2 := range resourceClaimInfos {
-					if rc.Name != rc2.Name {
-						for _, rc2Device := range rc2.Devices {
-							if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
-								if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
-									resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-									if err != nil {
-										return resourceClaimInfos, err
-									}
-									resourceClaimInfos[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
-									if err != nil {
-										return resourceClaimInfos, err
-									}
-									continue outerLoop
+			for i, rc2 := range resourceClaimInfos {
+				if rc.Name != rc2.Name {
+					for _, rc2Device := range rc2.Devices {
+						if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
+							if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
+								resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+								if err != nil {
+									return resourceClaimInfos, err
 								}
+								resourceClaimInfos[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
+								if err != nil {
+									return resourceClaimInfos, err
+								}
+								continue outerLoop
 							}
 						}
 					}
@@ -120,7 +120,6 @@ outerLoop:
 				return resourceClaimInfos, err
 			}
 			maxDevice, _ := GetModelLimit(node, model)
-			logger.Info("Configured device count", "model", model, "count", cofiguredDeviceCount, "max", maxDevice)
 
 			if cofiguredDeviceCount > maxDevice {
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
@@ -149,9 +148,6 @@ func RescheduleNotification(ctx context.Context, kubeClient client.Client, resou
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start RescheduleNotification")
 
-	logger.Info("Test info", "resourceClaimInfos", resourceClaimInfos)
-	logger.Info("Test info", "resourceSliceInfos", resourceSliceInfos)
-
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
 		return resourceClaimInfos, fmt.Errorf("failed to list composableResourceList: %v", err)
@@ -166,8 +162,13 @@ func RescheduleNotification(ctx context.Context, kubeClient client.Client, resou
 
 	var err error
 
-OuterLoop:
+outerLoop:
 	for k, rc := range resourceClaimInfos {
+		for _, rcDevice := range rc.Devices {
+			if rcDevice.State != "Preparing" {
+				continue outerLoop
+			}
+		}
 		resourceMatched := make(map[string]bool)
 		modelMap := getUniqueModelsWithCounts(rc)
 	MiddleLoop:
@@ -206,7 +207,7 @@ OuterLoop:
 					}
 				}
 			}
-			continue OuterLoop
+			continue outerLoop
 		}
 
 		resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Reschedule", "FabricDeviceReschedule")
@@ -244,13 +245,13 @@ func isLastUsedOverTime(resource cdioperator.ComposableResource, labelPrefix str
 
 	annotations := resource.GetAnnotations()
 	if annotations == nil {
-		return true, nil
+		return false, nil
 	}
 
 	label := labelPrefix + "/last-used-time"
 	lastUsedStr, exists := annotations[label]
 	if !exists {
-		return true, nil
+		return false, nil
 	} else {
 		lastUsedTime, err = time.Parse(time.RFC3339, lastUsedStr)
 		if err != nil {

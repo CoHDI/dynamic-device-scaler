@@ -135,6 +135,113 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 			expectedErrMsg: "failed to list composableResourceList:",
 		},
 		{
+			name: "failed to list ResourceClaims",
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource1",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource2",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node2",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource3",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node1",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Failed",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
+			resourceSliceInfos: []types.ResourceSliceInfo{
+				{
+					Name:   "rs1",
+					Driver: "gpu.nvidia.com",
+					Pool:   "test",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "device1",
+							UUID: "123",
+						},
+						{
+							Name: "device2",
+							UUID: "456",
+						},
+					},
+				},
+			},
+			resourceClaimInfos: []types.ResourceClaimInfo{
+				{
+					Name:     "rs1",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU1",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+						{
+							Name:  "GPU2",
+							Model: "A100 40G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs2",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU4",
+							Model: "A100 80G",
+							State: "Preparing",
+						},
+					},
+				},
+				{
+					Name:     "rs3",
+					NodeName: "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:  "GPU5",
+							Model: "A100 40G",
+							State: "Reschedule",
+						},
+					},
+				},
+			},
+			model:          "A100 40G",
+			nodeName:       "node1",
+			wantErr:        true,
+			expectedErrMsg: "failed to list ResourceClaims:",
+		},
+		{
 			name: "resourceClaim and nodeName do not match",
 			existingComposableResourceList: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
@@ -282,6 +389,23 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 		},
 		{
 			name: "pod allocated devices is 0",
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource1",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							TargetNode: "node2",
+							Model:      "A100 40G",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State:    "Online",
+							DeviceID: "123",
+						},
+					},
+				},
+			},
 			existingResourceClaim: &resourceapi.ResourceClaimList{
 				Items: []resourceapi.ResourceClaim{
 					{
@@ -533,7 +657,7 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := scheme.Scheme
+			s := runtime.NewScheme()
 
 			clientObjects := []runtime.Object{}
 			if tc.existingComposableResourceList != nil {
@@ -543,6 +667,7 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 			}
 			if tc.existingResourceClaim != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &resourceapi.ResourceClaim{}, &resourceapi.ResourceClaimList{})
 				for i := range tc.existingResourceClaim.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceClaim.Items[i])
 				}
@@ -573,22 +698,24 @@ func TestGetConfiguredDeviceCount(t *testing.T) {
 
 func TestDynamicAttach(t *testing.T) {
 	testCases := []struct {
-		name                         string
-		existingComposabilityRequest *cdioperator.ComposabilityRequestList
-		updateComposabilityRequest   *cdioperator.ComposabilityRequest
-		count                        int64
-		model                        string
-		nodeName                     string
-		resourceType                 string
-		wantErr                      bool
-		expectedErrMsg               string
+		name                           string
+		existingComposabilityRequest   *cdioperator.ComposabilityRequestList
+		updateComposabilityRequest     *cdioperator.ComposabilityRequest
+		composabilityRequestregistered bool
+		count                          int64
+		model                          string
+		nodeName                       string
+		resourceType                   string
+		wantErr                        bool
+		expectedErrMsg                 string
 	}{
 		{
-			name:                       "empty update ComposabilityRequest",
-			updateComposabilityRequest: nil,
-			model:                      "A100 40G",
-			count:                      2,
-			nodeName:                   "node1",
+			name:                           "empty update ComposabilityRequest",
+			updateComposabilityRequest:     nil,
+			composabilityRequestregistered: true,
+			model:                          "A100 40G",
+			count:                          2,
+			nodeName:                       "node1",
 		},
 		{
 			name: "empty existing ComposabilityRequest",
@@ -605,9 +732,16 @@ func TestDynamicAttach(t *testing.T) {
 					},
 				},
 			},
-			count:          2,
+			composabilityRequestregistered: true,
+			count:                          2,
+			wantErr:                        true,
+			expectedErrMsg:                 "failed to get ComposabilityRequest: composabilityrequests.meta.k8s.io \"test\" not found",
+		},
+		{
+			name:           "composabilityRequest not registered",
+			resourceType:   "gpu",
 			wantErr:        true,
-			expectedErrMsg: "failed to get ComposabilityRequest: composabilityrequests.meta.k8s.io \"test\" not found",
+			expectedErrMsg: "failed to create ComposabilityRequest:",
 		},
 		{
 			name: "normal case",
@@ -642,21 +776,25 @@ func TestDynamicAttach(t *testing.T) {
 					},
 				},
 			},
-			count: 4,
+			composabilityRequestregistered: true,
+			count:                          4,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
+
+			s := runtime.NewScheme()
+			if tc.composabilityRequestregistered {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+			}
+
 			if tc.existingComposabilityRequest != nil {
 				for i := range tc.existingComposabilityRequest.Items {
 					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -666,9 +804,8 @@ func TestDynamicAttach(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+
 				return
 			}
 
@@ -727,6 +864,45 @@ func TestDynamicDetach(t *testing.T) {
 		expectedErrMsg               string
 		expectedSize                 int64
 	}{
+		{
+			name:            "failed to list ComposableResourceList",
+			deviceNoRemoval: time.Minute,
+			count:           3,
+			nodeName:        "node1",
+			labelPrefix:     "composable.test",
+			existingComposabilityRequest: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "node1",
+							},
+						},
+					},
+				},
+			},
+			updateComposabilityRequest: &cdioperator.ComposabilityRequest{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: cdioperator.ComposabilityRequestSpec{
+					Resource: cdioperator.ScalarResourceDetails{
+						Type:       "gpu",
+						Size:       4,
+						Model:      "A100 40G",
+						TargetNode: "node1",
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "failed to list ComposableResourceList:",
+		},
 		{
 			name:            "nextSize less than composabilityRequest size",
 			deviceNoRemoval: time.Minute,
@@ -986,8 +1162,10 @@ func TestDynamicDetach(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
-			s := scheme.Scheme
+			s := runtime.NewScheme()
 			if tc.existingComposabilityRequest != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+
 				for i := range tc.existingComposabilityRequest.Items {
 					clientObjects = append(clientObjects, &tc.existingComposabilityRequest.Items[i])
 				}
@@ -999,8 +1177,6 @@ func TestDynamicDetach(t *testing.T) {
 					clientObjects = append(clientObjects, &tc.existingComposableResource.Items[i])
 				}
 			}
-
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 

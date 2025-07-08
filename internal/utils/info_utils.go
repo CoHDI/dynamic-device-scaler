@@ -29,7 +29,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 
 	resourceSliceList := &resourceapi.ResourceSliceList{}
 	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to list ResourceClaims: %v", err)
+		return nil, fmt.Errorf("failed to list ResourceSlices: %v", err)
 	}
 
 	for _, rc := range resourceClaimList.Items {
@@ -113,7 +113,7 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 
 	resourceSliceList := &resourceapi.ResourceSliceList{}
 	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to list ResourceClaims: %v", err)
+		return nil, fmt.Errorf("failed to list ResourceSlices: %v", err)
 	}
 
 	for _, rs := range resourceSliceList.Items {

@@ -163,6 +163,7 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 			}
 			return fmt.Errorf("failed to patch ComposabilityRequest: %v", err)
 		}
+		logger.V(1).Info("Successfully patched ComposabilityRequest size")
 		return nil
 	}
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)

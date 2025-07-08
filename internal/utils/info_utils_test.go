@@ -17,7 +17,6 @@ import (
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	"github.com/stretchr/testify/assert"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -737,24 +736,131 @@ func TestGetResourceClaimInfo(t *testing.T) {
 			wantErr:        true,
 			expectedErrMsg: "unknown device name:",
 		},
+		{
+			name: "failed to list ResourceClaims",
+			existingResourceSliceList: &resourceapi.ResourceSliceList{
+				Items: []resourceapi.ResourceSlice{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-resourceslice-1",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Spec: resourceapi.ResourceSliceSpec{
+							Driver:   "gpu.nvidia.com",
+							NodeName: "node1",
+							Devices: []resourceapi.Device{
+								{
+									Name: "gpu-1",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("1234")},
+											"productName": {StringValue: ptr.To("NVIDIA Test")},
+										},
+									},
+								},
+								{
+									Name: "gpu-2",
+									Basic: &resourceapi.BasicDevice{
+										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+											"uuid":        {StringValue: ptr.To("5678")},
+											"productName": {StringValue: ptr.To("NVIDIA Test")},
+										},
+									},
+								},
+							},
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "failed to list ResourceClaims:",
+		},
+		{
+			name: "failed to list ResourceSlices",
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "test-claim-1",
+							Namespace:         "default",
+							CreationTimestamp: metav1.Time{Time: now},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							ReservedFor: []resourceapi.ResourceClaimConsumerReference{
+								{
+									Resource: "pods",
+									Name:     "test-pod-1",
+									UID:      "1234",
+								},
+							},
+							Allocation: &resourceapi.AllocationResult{
+								Devices: resourceapi.DeviceAllocationResult{
+									Results: []resourceapi.DeviceRequestAllocationResult{
+										{
+											Device:            "gpu-1",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceReschedule"},
+										},
+										{
+											Device:            "gpu-2",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"FabricDeviceFailed"},
+										},
+										{
+											Device:            "gpu-3",
+											Driver:            "gpu.nvidia.com",
+											Pool:              "test-pool",
+											BindingConditions: []string{"test"},
+										},
+									},
+								},
+								NodeSelector: &corev1.NodeSelector{
+									NodeSelectorTerms: []corev1.NodeSelectorTerm{
+										{
+											MatchFields: []corev1.NodeSelectorRequirement{
+												{
+													Key:      "metadata.name",
+													Operator: corev1.NodeSelectorOpIn,
+													Values:   []string{"node1"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "failed to list ResourceSlices:",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
+			s := runtime.NewScheme()
+
 			if tc.existingResourceClaimList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &resourceapi.ResourceClaim{}, &resourceapi.ResourceClaimList{})
+
 				for i := range tc.existingResourceClaimList.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceClaimList.Items[i])
 				}
 			}
 
 			if tc.existingResourceSliceList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &resourceapi.ResourceSlice{}, &resourceapi.ResourceSliceList{})
 				for i := range tc.existingResourceSliceList.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceSliceList.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -782,6 +888,11 @@ func TestGetResourceSliceInfo(t *testing.T) {
 		wantErr                   bool
 		expectedErrMsg            string
 	}{
+		{
+			name:           "failed to list ResourceSlices",
+			wantErr:        true,
+			expectedErrMsg: "failed to list ResourceSlices:",
+		},
 		{
 			name: "resourceSlice with binding conditions",
 			existingResourceSliceList: &resourceapi.ResourceSliceList{
@@ -877,13 +988,14 @@ func TestGetResourceSliceInfo(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
+			s := runtime.NewScheme()
+
 			if tc.existingResourceSliceList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &resourceapi.ResourceSlice{}, &resourceapi.ResourceSliceList{})
 				for i := range tc.existingResourceSliceList.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceSliceList.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -893,9 +1005,7 @@ func TestGetResourceSliceInfo(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 
@@ -1195,7 +1305,7 @@ func TestGetNodeInfo(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				assert.ErrorContains(t, err, tc.expectedErrMsg)
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 			if err != nil {
@@ -1216,6 +1326,7 @@ func TestGetModelName(t *testing.T) {
 	tests := []struct {
 		name              string
 		deviceName        string
+		productName       string
 		composableDRASpec types.ComposableDRASpec
 		wantErr           bool
 		expectedErrMsg    string
@@ -1250,11 +1361,28 @@ func TestGetModelName(t *testing.T) {
 			},
 			expectedResult: "A100 40G",
 		},
+		{
+			name:        "normal product name",
+			productName: "NVIDIA A100 40GB PCIe",
+			composableDRASpec: types.ComposableDRASpec{
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 40G",
+						K8sDeviceName: "nvidia-a100-40",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 40GB PCIe",
+						},
+					},
+				},
+			},
+			expectedResult: "A100 40G",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := getModelName(tc.composableDRASpec, tc.deviceName, "")
+			result, err := getModelName(tc.composableDRASpec, tc.deviceName, tc.productName)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error but got nil")
