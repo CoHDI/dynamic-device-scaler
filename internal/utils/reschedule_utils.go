@@ -188,7 +188,7 @@ outerLoop:
 							}
 							logger.Info("Test info", "RescheduleNotification", "not used by pod")
 
-							isOvertime, err := isLastUsedOverTime(resource, labelPrefix, deviceNoAllocation)
+							isOvertime, err := isLastUsedOverThreshold(resource, labelPrefix, deviceNoAllocation, true)
 							if err != nil {
 								return resourceClaimInfos, err
 							}
@@ -239,30 +239,27 @@ func getUniqueModelsWithCounts(resourceClaimInfo types.ResourceClaimInfo) map[st
 	return modelMap
 }
 
-func isLastUsedOverTime(resource cdioperator.ComposableResource, labelPrefix string, deviceNoAllocation time.Duration) (bool, error) {
-	var lastUsedTime time.Time
-	var err error
-
+func isLastUsedOverThreshold(resource cdioperator.ComposableResource, labelPrefix string, threshold time.Duration, defaultWhenNotExists bool) (bool, error) {
 	annotations := resource.GetAnnotations()
 	if annotations == nil {
-		return false, nil
+		return defaultWhenNotExists, nil
 	}
 
 	label := labelPrefix + "/last-used-time"
 	lastUsedStr, exists := annotations[label]
 	if !exists {
-		return false, nil
-	} else {
-		lastUsedTime, err = time.Parse(time.RFC3339, lastUsedStr)
-		if err != nil {
-			return false, fmt.Errorf("failed to parse time: %v", err)
-		}
+		return defaultWhenNotExists, nil
+	}
+
+	lastUsedTime, err := time.Parse(time.RFC3339, lastUsedStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse time: %v", err)
 	}
 
 	now := time.Now().UTC()
 	duration := now.Sub(lastUsedTime.UTC())
 
-	return duration > deviceNoAllocation, nil
+	return duration > threshold, nil
 }
 
 func isDeviceCoexistence(model1, model2 string, composableDRASpec types.ComposableDRASpec) bool {

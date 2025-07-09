@@ -175,7 +175,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nod
 	for _, resource := range resourceList.Items {
 		if (resource.Status.State == "Online" || resource.Status.State == "Attaching") &&
 			resource.Spec.TargetNode == nodeName && resource.DeletionTimestamp == nil {
-			over, err := isLastUsedOverTime(resource, labelPrefix, deviceNoRemoval)
+			over, err := isLastUsedOverThreshold(resource, labelPrefix, deviceNoRemoval, false)
 			if err != nil {
 				return 0, err
 			}

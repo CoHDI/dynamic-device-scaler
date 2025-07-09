@@ -203,52 +203,55 @@ func TestIsDeviceCoexistence(t *testing.T) {
 
 func TestIsLastUsedOverMinute(t *testing.T) {
 	tests := []struct {
-		name               string
-		annotations        map[string]string
-		deviceNoAllocation time.Duration
-		expectedResult     bool
-		expectedErr        bool
-		errMsg             string
+		name                 string
+		annotations          map[string]string
+		threshold            time.Duration
+		defaultWhenNotExists bool
+		expectedResult       bool
+		expectedErr          bool
+		errMsg               string
 	}{
 		{
-			name:               "No annotations",
-			annotations:        nil,
-			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
+			name:                 "No annotations",
+			annotations:          nil,
+			threshold:            time.Minute,
+			defaultWhenNotExists: false,
+			expectedResult:       false,
 		},
 		{
-			name:               "Annotation not found",
-			annotations:        map[string]string{},
-			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
+			name:                 "Annotation not found",
+			annotations:          map[string]string{},
+			threshold:            time.Minute,
+			defaultWhenNotExists: true,
+			expectedResult:       true,
 		},
 		{
 			name: "Invalid time format",
 			annotations: map[string]string{
 				"composable.test/last-used-time": "invalid-time-format",
 			},
-			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
-			expectedErr:        true,
-			errMsg:             fmt.Errorf("failed to parse time: %v", fmt.Errorf("parsing time \"invalid-time-format\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"invalid-time-format\" as \"2006\"")).Error(),
+			threshold:      time.Minute,
+			expectedResult: false,
+			expectedErr:    true,
+			errMsg:         fmt.Errorf("failed to parse time: %v", fmt.Errorf("parsing time \"invalid-time-format\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"invalid-time-format\" as \"2006\"")).Error(),
 		},
 		{
-			name: "Time less than deviceNoAllocation",
+			name: "Time less than threshold",
 			annotations: map[string]string{
 				"composable.test/last-used-time": time.Now().Add(-30 * time.Second).Format(time.RFC3339),
 			},
-			deviceNoAllocation: time.Minute,
-			expectedResult:     false,
-			expectedErr:        false,
+			threshold:      time.Minute,
+			expectedResult: false,
+			expectedErr:    false,
 		},
 		{
-			name: "Time more than deviceNoAllocation",
+			name: "Time more than threshold",
 			annotations: map[string]string{
 				"composable.test/last-used-time": time.Now().Add(-2 * time.Minute).Format(time.RFC3339),
 			},
-			deviceNoAllocation: time.Minute,
-			expectedResult:     true,
-			expectedErr:        false,
+			threshold:      time.Minute,
+			expectedResult: true,
+			expectedErr:    false,
 		},
 	}
 
@@ -266,7 +269,7 @@ func TestIsLastUsedOverMinute(t *testing.T) {
 				},
 			}
 
-			result, err := isLastUsedOverTime(resource, "composable.test", tt.deviceNoAllocation)
+			result, err := isLastUsedOverThreshold(resource, "composable.test", tt.threshold, tt.defaultWhenNotExists)
 
 			if tt.expectedErr {
 				if err == nil {
