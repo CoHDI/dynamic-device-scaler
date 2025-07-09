@@ -17,10 +17,6 @@ spec:
         control-plane: controller-manager
         app.kubernetes.io/name: dynamic-device-scaler
     spec:
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
       containers:
       - name: dynamic-device-scaler
         image: localhost/dynamic-device-scaler:latest
