@@ -104,7 +104,7 @@ undeploy: manifests
 clean:
 	rm -rf $(LOCALBIN)
 	rm -f coverage.out
-	rm -f $(DEPLOY_DIR)
+	rm -rf $(DEPLOY_DIR)
 
 .PHONY: help
 help:
