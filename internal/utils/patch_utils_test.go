@@ -1,3 +1,19 @@
+/*
+Copyright 2025 The CoHDI Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package utils
 
 import (
@@ -7,6 +23,7 @@ import (
 
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +47,127 @@ func TestUpdateNodeLabel(t *testing.T) {
 		expectedErrMsg       string
 	}{
 		{
-			name:           "node not exist",
+			name:           "failed to list composabilityRequestList",
+			nodeName:       "test",
+			wantErr:        true,
+			expectedErrMsg: "failed to list composabilityRequestList:",
+		},
+		{
+			name: "failed to list ComposableResourceList",
+			existingRequestList: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request1",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "test",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request2",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       0,
+								Model:      "A100 80G",
+								TargetNode: "test",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request3",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       2,
+								Model:      "H100",
+								TargetNode: "test2",
+							},
+						},
+					},
+				},
+			},
+			nodeName:       "test",
+			wantErr:        true,
+			expectedErrMsg: "failed to list ComposableResourceList",
+		},
+		{
+			name: "node not exist",
+			existingRequestList: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request1",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       2,
+								Model:      "A100 40G",
+								TargetNode: "test",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request2",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       0,
+								Model:      "A100 80G",
+								TargetNode: "test",
+							},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "request3",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Size:       2,
+								Model:      "H100",
+								TargetNode: "test2",
+							},
+						},
+					},
+				},
+			},
+			existingResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource1",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Model:      "A100 40G",
+							TargetNode: "test",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State: "Online",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource2",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Model:      "A100 80G",
+							TargetNode: "test",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State: "Deleting",
+						},
+					},
+				},
+			},
 			nodeName:       "test",
 			wantErr:        true,
 			expectedErrMsg: "patch failed: nodes \"test\" not found",
@@ -101,6 +238,18 @@ func TestUpdateNodeLabel(t *testing.T) {
 						},
 						Status: cdioperator.ComposableResourceStatus{
 							State: "Deleting",
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "resource3",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Model:      "A100 60G",
+							TargetNode: "test",
+						},
+						Status: cdioperator.ComposableResourceStatus{
+							State: "Online",
 						},
 					},
 				},
@@ -180,22 +329,23 @@ func TestUpdateNodeLabel(t *testing.T) {
 			}
 
 			kubeClient := k8sfake.NewClientset(kubeObjects...)
+			s := runtime.NewScheme()
 
 			clientObjects := []runtime.Object{}
 			if tc.existingRequestList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+
 				for i := range tc.existingRequestList.Items {
 					clientObjects = append(clientObjects, &tc.existingRequestList.Items[i])
 				}
 			}
 			if tc.existingResourceList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+
 				for i := range tc.existingResourceList.Items {
 					clientObjects = append(clientObjects, &tc.existingResourceList.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -205,9 +355,7 @@ func TestUpdateNodeLabel(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 			if err != nil {
