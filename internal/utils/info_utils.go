@@ -18,13 +18,15 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	v1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
@@ -32,6 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+var driverUUIDAttrMap = map[string]string{
+	"gpu.nvidia.com": "uuid",
+}
+
+// GetResourceClaimInfo retrieves ResourceClaim information.
 func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composableDRASpec types.ComposableDRASpec) ([]types.ResourceClaimInfo, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start collecting ResourceClaim info")
@@ -68,7 +75,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 				if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
 					for _, resourceSliceDevice := range rs.Spec.Devices {
 						if resourceSliceDevice.Name == device.Device {
-							model, err := getModelName(composableDRASpec, "", *resourceSliceDevice.Basic.Attributes["productName"].StringValue)
+							model, err := getModelName(composableDRASpec, "", *resourceSliceDevice.Attributes["productName"].StringValue)
 							logger.Info("Found model name for device", "device", device.Device, "model", model)
 							if err != nil {
 								return nil, err
@@ -121,6 +128,7 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 	return resourceClaimInfoList, nil
 }
 
+// GetResourceSliceInfo retrieves ResourceSlice information.
 func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]types.ResourceSliceInfo, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start collecting ResourceSlice info")
@@ -142,20 +150,18 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 		resourceSliceInfo.Name = rs.Name
 		resourceSliceInfo.CreationTimestamp = rs.CreationTimestamp
 		resourceSliceInfo.Driver = rs.Spec.Driver
-		resourceSliceInfo.NodeName = rs.Spec.NodeName
+		resourceSliceInfo.NodeName = *rs.Spec.NodeName
 		resourceSliceInfo.Pool = rs.Spec.Pool.Name
 
 		for _, device := range rs.Spec.Devices {
-			if device.Basic != nil {
-				var deviceInfo types.ResourceSliceDevice
-				deviceInfo.Name = device.Name
-				for attrName, attrValue := range device.Basic.Attributes {
-					if attrName == "uuid" {
-						deviceInfo.UUID = *attrValue.StringValue
-					}
+			var deviceInfo types.ResourceSliceDevice
+			deviceInfo.Name = device.Name
+			for attrName, attrValue := range device.Attributes {
+				if driverUUIDAttrMap[rs.Spec.Driver] == string(attrName) {
+					deviceInfo.UUID = *attrValue.StringValue
 				}
-				resourceSliceInfo.Devices = append(resourceSliceInfo.Devices, deviceInfo)
 			}
+			resourceSliceInfo.Devices = append(resourceSliceInfo.Devices, deviceInfo)
 		}
 
 		resourceSliceInfoList = append(resourceSliceInfoList, resourceSliceInfo)
@@ -166,6 +172,7 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 	return resourceSliceInfoList, nil
 }
 
+// GetNodeInfo retrieves Node information.
 func GetNodeInfo(ctx context.Context, clientSet kubernetes.Interface, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start collecting Node info")
@@ -184,6 +191,7 @@ func GetNodeInfo(ctx context.Context, clientSet kubernetes.Interface, composable
 	return nodeInfos, nil
 }
 
+// processNodeInfo processes Node information.
 func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASpec) ([]types.NodeInfo, error) {
 	var nodeInfoList []types.NodeInfo
 
@@ -192,6 +200,8 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 
 		nodeInfo.Name = node.Name
 
+		maxDeviceSet := make(map[string]bool)
+		minDeviceSet := make(map[string]bool)
 		labels := node.Labels
 		for key, val := range labels {
 			if !strings.HasPrefix(key, composableDRASpec.LabelPrefix+"/") {
@@ -211,12 +221,14 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				if err != nil {
 					return nil, err
 				}
+				maxDeviceSet[deviceName] = true
 
 				exit = false
 				for i := range nodeInfo.Models {
 					if nodeInfo.Models[i].DeviceName == deviceName {
 						nodeInfo.Models[i].MaxDevice = max
 						nodeInfo.Models[i].Model = model
+						nodeInfo.Models[i].MaxDeviceSet = true
 						exit = true
 						break
 					}
@@ -224,9 +236,10 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 
 				if !exit {
 					newModelConstraint := types.ModelConstraints{
-						DeviceName: deviceName,
-						Model:      model,
-						MaxDevice:  max,
+						DeviceName:   deviceName,
+						Model:        model,
+						MaxDevice:    max,
+						MaxDeviceSet: true,
 					}
 
 					nodeInfo.Models = append(nodeInfo.Models, newModelConstraint)
@@ -242,6 +255,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				if err != nil {
 					return nil, err
 				}
+				minDeviceSet[deviceName] = true
 
 				exit = false
 				for i := range nodeInfo.Models {
@@ -271,6 +285,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 	return nodeInfoList, nil
 }
 
+// getModelName retrieves the model name for a specific device.
 func getModelName(composableDRASpec types.ComposableDRASpec, deviceName, productName string) (string, error) {
 	if deviceName != "" {
 		for _, deviceInfo := range composableDRASpec.DeviceInfos {
@@ -291,6 +306,7 @@ func getModelName(composableDRASpec types.ComposableDRASpec, deviceName, product
 	return "", fmt.Errorf("unknown device name: %s", deviceName)
 }
 
+// GetConfigMapInfo retrieves ConfigMap information.
 func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (types.ComposableDRASpec, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start collecting ConfigMap info")
@@ -305,11 +321,20 @@ func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (type
 	if err = yaml.Unmarshal([]byte(configMap.Data["device-info"]), &composableDRASpec.DeviceInfos); err != nil {
 		return composableDRASpec, fmt.Errorf("failed to parse device-info: %v", err)
 	}
+	if err = validateDeviceInfo(composableDRASpec.DeviceInfos); err != nil {
+		return composableDRASpec, fmt.Errorf("invalid device-info: %v, error: %v", composableDRASpec.DeviceInfos, err)
+	}
 
 	composableDRASpec.LabelPrefix = configMap.Data["label-prefix"]
+	if !isValidLabelNamePrefix(composableDRASpec.LabelPrefix) {
+		return composableDRASpec, fmt.Errorf("invalid label prefix: %s", composableDRASpec.LabelPrefix)
+	}
 
 	if err := yaml.Unmarshal([]byte(configMap.Data["fabric-id-range"]), &composableDRASpec.FabricIDRange); err != nil {
 		return composableDRASpec, fmt.Errorf("failed to parse fabric-id-range: %v", err)
+	}
+	if len(composableDRASpec.FabricIDRange) > 100 {
+		return composableDRASpec, fmt.Errorf("fabric-id-range exceeds 100 item limit: %v", composableDRASpec.FabricIDRange)
 	}
 
 	logger.V(1).Info("Finish collecting ConfigMap info", "composableDRASpec", composableDRASpec)
@@ -317,6 +342,98 @@ func GetConfigMapInfo(ctx context.Context, clientSet kubernetes.Interface) (type
 	return composableDRASpec, nil
 }
 
+func validateDeviceInfo(infos []types.DeviceInfo) error {
+	for _, info := range infos {
+		if info.Index < 0 || info.Index > 10000 {
+			return fmt.Errorf("index must be between 0 and 10000")
+		}
+		if len(info.CDIModelName) > 1024 {
+			return fmt.Errorf("cdi-model-name exceeds 1KB limit")
+		}
+		if len(info.DriverName) > 1024 {
+			return fmt.Errorf("driver-name exceeds 1KB limit")
+		}
+		if err := validateDNSLabel(info.K8sDeviceName, 50); err != nil {
+			return fmt.Errorf("k8s-device-name invalid: %v", err)
+		}
+		if len(info.CannotCoexistWith) > 100 {
+			return fmt.Errorf("cannot-coexist-with exceeds 100 item limit")
+		}
+	}
+
+	return nil
+}
+
+// validateDNSLabel validates a DNS label according to Kubernetes naming conventions.
+func validateDNSLabel(name string, maxLength int) error {
+	if len(name) == 0 {
+		return errors.New("cannot be empty")
+	}
+	if len(name) > maxLength {
+		return fmt.Errorf("exceeds %d character limit", maxLength)
+	}
+
+	first := rune(name[0])
+	if !unicode.IsLetter(first) && !unicode.IsDigit(first) {
+		return errors.New("must start with letter or digit")
+	}
+
+	last := rune(name[len(name)-1])
+	if !unicode.IsLetter(last) && !unicode.IsDigit(last) {
+		return errors.New("must end with letter or digit")
+	}
+
+	for _, c := range name {
+		switch {
+		case unicode.IsLetter(c) || unicode.IsDigit(c):
+		case c == '-':
+		default:
+			return fmt.Errorf("contains invalid character '%c'", c)
+		}
+	}
+
+	return nil
+}
+
+// isValidLabelNamePrefix checks if a label name prefix is valid.
+func isValidLabelNamePrefix(s string) bool {
+	if len(s) > 100 {
+		return false
+	}
+
+	if s == "" {
+		return false
+	}
+
+	first := rune(s[0])
+	if !unicode.IsLetter(first) && !unicode.IsDigit(first) {
+		return false
+	}
+
+	last := rune(s[len(s)-1])
+	if !unicode.IsLetter(last) && !unicode.IsDigit(last) {
+		return false
+	}
+
+	prev := rune(0)
+	for _, c := range s {
+		switch {
+		case unicode.IsLetter(c) || unicode.IsDigit(c):
+		case c == '.' || c == '-':
+		default:
+			return false
+		}
+
+		if c == '.' && prev == '.' {
+			return false
+		}
+		prev = c
+	}
+
+	return true
+}
+
+// hasConditionWithStatus checks if a specific condition with a given status exists.
 func hasConditionWithStatus(conditions []metav1.Condition, conditionType string, status metav1.ConditionStatus) bool {
 	for _, c := range conditions {
 		if c.Type == conditionType && c.Status == status {
@@ -326,6 +443,7 @@ func hasConditionWithStatus(conditions []metav1.Condition, conditionType string,
 	return false
 }
 
+// hasMatchingBindingCondition checks if there is a matching binding condition.
 func hasMatchingBindingCondition(
 	conditions []metav1.Condition,
 	bindingConditions []string,
@@ -360,9 +478,10 @@ func hasMatchingBindingCondition(
 	return false
 }
 
+// hasBindingConditions checks if a ResourceSlice has any binding conditions.
 func hasBindingConditions(rs resourceapi.ResourceSlice) bool {
 	for _, device := range rs.Spec.Devices {
-		if len(device.Basic.BindingConditions) > 0 {
+		if len(device.BindingConditions) > 0 {
 			return true
 		}
 	}
@@ -370,6 +489,7 @@ func hasBindingConditions(rs resourceapi.ResourceSlice) bool {
 	return false
 }
 
+// getNodeName retrieves the node name from a NodeSelector.
 func getNodeName(selector v1.NodeSelector) string {
 	for _, term := range selector.NodeSelectorTerms {
 		for _, field := range term.MatchFields {

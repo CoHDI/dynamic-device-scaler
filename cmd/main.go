@@ -52,6 +52,8 @@ func init() {
 
 // nolint:gocyclo
 func main() {
+	const timeoutDuration = 30 * time.Second
+
 	var enableLeaderElection bool
 	var probeAddr, logLevel string
 
@@ -69,8 +71,6 @@ func main() {
 		level = zapcore.DebugLevel
 	case "info":
 		level = zapcore.InfoLevel
-	case "warn":
-		level = zapcore.WarnLevel
 	case "error":
 		level = zapcore.ErrorLevel
 	default:
@@ -85,7 +85,11 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	cfg := ctrl.GetConfigOrDie()
+
+	cfg.Timeout = timeoutDuration
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,

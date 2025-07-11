@@ -25,7 +25,7 @@ import (
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -170,7 +170,7 @@ func TestUpdateNodeLabel(t *testing.T) {
 			},
 			nodeName:       "test",
 			wantErr:        true,
-			expectedErrMsg: "patch failed: nodes \"test\" not found",
+			expectedErrMsg: "patch failed:",
 		},
 		{
 			name: "update node label successfully",
@@ -405,19 +405,25 @@ func TestPatchComposabilityRequestSize(t *testing.T) {
 			count:        3,
 			expectedSize: 3,
 		},
+		{
+			name:           "failed to get ComposabilityRequest",
+			requestName:    "request1",
+			wantErr:        true,
+			expectedErrMsg: "failed to get ComposabilityRequest:",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientObjects := []runtime.Object{}
+			s := runtime.NewScheme()
 			if tc.existingRequestList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
+
 				for i := range tc.existingRequestList.Items {
 					clientObjects = append(clientObjects, &tc.existingRequestList.Items[i])
 				}
 			}
-
-			s := scheme.Scheme
-			s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposabilityRequest{}, &cdioperator.ComposabilityRequestList{})
 
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
 
@@ -427,9 +433,7 @@ func TestPatchComposabilityRequestSize(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error, but got nil")
 				}
-				if err.Error() != tc.expectedErrMsg {
-					t.Errorf("Error message is incorrect. Got: %q, Want: %q", err.Error(), tc.expectedErrMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
 			}
 			if err != nil {
@@ -476,8 +480,13 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 							Devices: resourceapi.DeviceClaim{
 								Requests: []resourceapi.DeviceRequest{
 									{
-										Name:            "gpu",
-										DeviceClassName: "gpu.nvidia.com",
+										Name: "gpu0",
+										FirstAvailable: []resourceapi.DeviceSubRequest{
+											{
+												Name:            "gpu",
+												DeviceClassName: "gpu.nvidia.com",
+											},
+										},
 									},
 								},
 							},
@@ -511,8 +520,13 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 							Devices: resourceapi.DeviceClaim{
 								Requests: []resourceapi.DeviceRequest{
 									{
-										Name:            "gpu",
-										DeviceClassName: "gpu.nvidia.com",
+										Name: "gpu0",
+										FirstAvailable: []resourceapi.DeviceSubRequest{
+											{
+												Name:            "gpu",
+												DeviceClassName: "gpu.nvidia.com",
+											},
+										},
 									},
 								},
 							},
@@ -525,6 +539,55 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 											Device: "gpu-0",
 											Driver: "gpu.nvidia.com",
 											Pool:   "k8s-dra-driver",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			resourceClaimName: "resource1",
+			namespace:         "default",
+			conditionType:     "FabricDeviceReschedule",
+		},
+		{
+			name: "device condition already exists",
+			existingResourceClaimList: &resourceapi.ResourceClaimList{
+				Items: []resourceapi.ResourceClaim{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "resource1",
+							Namespace: "default",
+						},
+						Spec: resourceapi.ResourceClaimSpec{
+							Devices: resourceapi.DeviceClaim{
+								Requests: []resourceapi.DeviceRequest{
+									{
+										Name: "gpu0",
+										FirstAvailable: []resourceapi.DeviceSubRequest{
+											{
+												Name:            "gpu",
+												DeviceClassName: "gpu.nvidia.com",
+											},
+										},
+									},
+								},
+							},
+						},
+						Status: resourceapi.ResourceClaimStatus{
+							Devices: []resourceapi.AllocatedDeviceStatus{
+								{
+									Device: "gpu-0",
+									Driver: "gpu.nvidia.com",
+									Pool:   "k8s-dra-driver",
+									Conditions: []metav1.Condition{
+										{
+											Type:               "FabricDeviceReschedule",
+											Status:             metav1.ConditionFalse,
+											Reason:             "DeviceConditionUpdated",
+											Message:            "Device gpu-0 condition FabricDeviceReschedule updated",
+											LastTransitionTime: metav1.Now(),
 										},
 									},
 								},
@@ -586,6 +649,107 @@ func TestPatchResourceClaimDeviceConditions(t *testing.T) {
 			}
 			if !found {
 				t.Errorf("Expected condition %s not found in Device Conditions", tc.conditionType)
+			}
+		})
+	}
+}
+
+func TestPatchComposableResourceAnnotation(t *testing.T) {
+	testCases := []struct {
+		name                           string
+		existingComposableResourceList *cdioperator.ComposableResourceList
+		resourceName                   string
+		key                            string
+		value                          string
+		wantErr                        bool
+		expectedErrMsg                 string
+	}{
+		{
+			name:           "failed to get ComposableResource",
+			resourceName:   "test",
+			wantErr:        true,
+			expectedErrMsg: "failed to get latest ComposableResource:",
+		},
+		{
+			name: "normal case",
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Type: "GPU",
+						},
+					},
+				},
+			},
+			resourceName: "test",
+			key:          "test-key",
+			value:        "test-value",
+		},
+		{
+			name: "annotation exist",
+			existingComposableResourceList: &cdioperator.ComposableResourceList{
+				Items: []cdioperator.ComposableResource{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test",
+							Annotations: map[string]string{
+								"test-key": "test-value",
+							},
+						},
+						Spec: cdioperator.ComposableResourceSpec{
+							Type: "GPU",
+						},
+					},
+				},
+			},
+			resourceName: "test",
+			key:          "test-key",
+			value:        "test-value",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := runtime.NewScheme()
+			clientObjects := []runtime.Object{}
+			if tc.existingComposableResourceList != nil {
+				s.AddKnownTypes(metav1.SchemeGroupVersion, &cdioperator.ComposableResource{}, &cdioperator.ComposableResourceList{})
+				for i := range tc.existingComposableResourceList.Items {
+					clientObjects = append(clientObjects, &tc.existingComposableResourceList.Items[i])
+				}
+			}
+
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(clientObjects...).Build()
+
+			err := PatchComposableResourceAnnotation(context.Background(), fakeClient, tc.resourceName, tc.key, tc.value)
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			updatedComposableResource := &cdioperator.ComposableResource{}
+			err = fakeClient.Get(
+				context.Background(),
+				k8stypes.NamespacedName{Name: tc.resourceName},
+				updatedComposableResource,
+			)
+			if err != nil {
+				t.Fatalf("Failed to get updated ComposableResource: %v", err)
+			}
+
+			if updatedComposableResource.Annotations[tc.key] != tc.value {
+				t.Errorf("Expected annotation %q to be %q, but got %q",
+					tc.key, tc.value, updatedComposableResource.Annotations[tc.key])
 			}
 		})
 	}

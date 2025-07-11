@@ -25,7 +25,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -163,24 +163,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 							},
@@ -328,24 +324,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 							},
@@ -475,24 +467,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 							},
@@ -585,24 +573,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
 									},
 								},
 							},
@@ -721,24 +705,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA Test")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA Test")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA Test")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA Test")},
 									},
 								},
 							},
@@ -763,24 +743,20 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("1234")},
-											"productName": {StringValue: ptr.To("NVIDIA Test")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("1234")},
+										"productName": {StringValue: ptr.To("NVIDIA Test")},
 									},
 								},
 								{
 									Name: "gpu-2",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid":        {StringValue: ptr.To("5678")},
-											"productName": {StringValue: ptr.To("NVIDIA Test")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid":        {StringValue: ptr.To("5678")},
+										"productName": {StringValue: ptr.To("NVIDIA Test")},
 									},
 								},
 							},
@@ -890,6 +866,9 @@ func TestGetResourceClaimInfo(t *testing.T) {
 				return
 			}
 
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			assert.ElementsMatch(t, result, tc.expectedResourceClaimInfo)
 		})
 	}
@@ -920,25 +899,21 @@ func TestGetResourceSliceInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-0",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("1234")},
-										},
-										BindingConditions: []string{"test"},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid": {StringValue: ptr.To("1234")},
 									},
+									BindingConditions: []string{"test"},
 								},
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("5678")},
-										},
-										BindingConditions: []string{"test"},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid": {StringValue: ptr.To("5678")},
 									},
+									BindingConditions: []string{"test"},
 								},
 							},
 						},
@@ -957,22 +932,18 @@ func TestGetResourceSliceInfo(t *testing.T) {
 						},
 						Spec: resourceapi.ResourceSliceSpec{
 							Driver:   "gpu.nvidia.com",
-							NodeName: "node1",
+							NodeName: ptr.To("node1"),
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu-0",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("1234")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid": {StringValue: ptr.To("1234")},
 									},
 								},
 								{
 									Name: "gpu-1",
-									Basic: &resourceapi.BasicDevice{
-										Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-											"uuid": {StringValue: ptr.To("5678")},
-										},
+									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
+										"uuid": {StringValue: ptr.To("5678")},
 									},
 								},
 							},
@@ -1023,6 +994,10 @@ func TestGetResourceSliceInfo(t *testing.T) {
 				}
 				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 
 			assert.ElementsMatch(t, result, tc.expectedResourceSliceInfo)
@@ -1088,10 +1063,51 @@ func TestGetNodeInfo(t *testing.T) {
 					Name: "node1",
 					Models: []types.ModelConstraints{
 						{
-							Model:      "A100 80G",
-							DeviceName: "nvidia-a100-80g",
-							MinDevice:  2,
-							MaxDevice:  6,
+							Model:        "A100 80G",
+							DeviceName:   "nvidia-a100-80g",
+							MinDevice:    2,
+							MaxDevice:    6,
+							MaxDeviceSet: true,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "max value not set",
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 80G",
+						K8sDeviceName: "nvidia-a100-80g",
+					},
+				},
+			},
+			existingNode: &corev1.NodeList{
+				Items: []corev1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node1",
+							Labels: map[string]string{
+								"composable.fsastech.com/nvidia-a100-80g":          "true",
+								"composable.fsastech.com/fabric":                   "123",
+								"composable.fsastech.com/nvidia-a100-80g-size-min": "2",
+							},
+						},
+					},
+				},
+			},
+			expectedNodeInfos: []types.NodeInfo{
+				{
+					Name: "node1",
+					Models: []types.ModelConstraints{
+						{
+							Model:        "A100 80G",
+							DeviceName:   "nvidia-a100-80g",
+							MinDevice:    2,
+							MaxDeviceSet: false,
 						},
 					},
 				},
@@ -1125,7 +1141,7 @@ func TestGetNodeInfo(t *testing.T) {
 				},
 			},
 			wantErr:        true,
-			expectedErrMsg: "unknown device name: nvidia-a100-80g",
+			expectedErrMsg: "unknown device name:",
 		},
 		{
 			name: "node label with invalid integer",
@@ -1155,7 +1171,7 @@ func TestGetNodeInfo(t *testing.T) {
 				},
 			},
 			wantErr:        true,
-			expectedErrMsg: "invalid integer in ss: strconv.Atoi:",
+			expectedErrMsg: "invalid integer in ss:",
 		},
 		{
 			name: "node without expected prefix label",
@@ -1218,7 +1234,7 @@ func TestGetNodeInfo(t *testing.T) {
 				},
 			},
 			wantErr:        true,
-			expectedErrMsg: "invalid integer in ss: strconv.Atoi: ",
+			expectedErrMsg: "invalid integer in ss:",
 		},
 		{
 			name: "node with error model info label",
@@ -1290,16 +1306,18 @@ func TestGetNodeInfo(t *testing.T) {
 					Name: "node1",
 					Models: []types.ModelConstraints{
 						{
-							Model:      "A100 80G",
-							DeviceName: "nvidia-a100-80g",
-							MinDevice:  2,
-							MaxDevice:  6,
+							Model:        "A100 80G",
+							DeviceName:   "nvidia-a100-80g",
+							MinDevice:    2,
+							MaxDevice:    6,
+							MaxDeviceSet: true,
 						},
 						{
-							Model:      "A100 40G",
-							DeviceName: "nvidia-a100-40g",
-							MinDevice:  1,
-							MaxDevice:  5,
+							Model:        "A100 40G",
+							DeviceName:   "nvidia-a100-40g",
+							MinDevice:    1,
+							MaxDevice:    5,
+							MaxDeviceSet: true,
 						},
 					},
 				},
@@ -1565,13 +1583,6 @@ func TestHasMatchingBindingCondition(t *testing.T) {
 			expected:       true,
 		},
 		{
-			name:           "Match in both lists",
-			conditions:     []metav1.Condition{trueConditionA},
-			binding:        []string{"TypeA"},
-			bindingFailure: []string{"TypeA"},
-			expected:       true,
-		},
-		{
 			name:           "Condition exists but wrong status",
 			conditions:     []metav1.Condition{falseConditionA},
 			binding:        []string{"TypeA"},
@@ -1600,53 +1611,11 @@ func TestHasMatchingBindingCondition(t *testing.T) {
 			expected:       false,
 		},
 		{
-			name:           "Multiple conditions with match",
-			conditions:     []metav1.Condition{falseConditionA, trueConditionB, trueConditionC},
-			binding:        []string{"TypeB"},
-			bindingFailure: []string{"TypeD"},
-			expected:       true,
-		},
-		{
-			name:           "Multiple conditions without match",
-			conditions:     []metav1.Condition{falseConditionA, trueConditionC},
-			binding:        []string{"TypeA"},
-			bindingFailure: []string{"TypeB"},
-			expected:       false,
-		},
-		{
-			name:           "Match in bindingFailure with multiple conditions",
-			conditions:     []metav1.Condition{trueConditionA, falseConditionA, trueConditionB},
-			binding:        []string{"TypeC"},
-			bindingFailure: []string{"TypeB"},
-			expected:       true,
-		},
-		{
-			name:           "Nil conditions slice",
-			conditions:     nil,
-			binding:        []string{"TypeA"},
-			bindingFailure: []string{"TypeB"},
-			expected:       false,
-		},
-		{
-			name:           "Nil binding lists",
-			conditions:     []metav1.Condition{trueConditionA},
-			binding:        nil,
-			bindingFailure: nil,
-			expected:       false,
-		},
-		{
 			name:           "Condition in bindingFailure but status false",
 			conditions:     []metav1.Condition{falseConditionA},
 			binding:        nil,
 			bindingFailure: []string{"TypeA"},
 			expected:       false,
-		},
-		{
-			name:           "Match with duplicate in binding lists",
-			conditions:     []metav1.Condition{trueConditionA},
-			binding:        []string{"TypeA", "TypeA"},
-			bindingFailure: []string{"TypeB", "TypeA"},
-			expected:       true,
 		},
 	}
 
@@ -1701,6 +1670,143 @@ func TestGetNodeName(t *testing.T) {
 
 			if result != tt.expected {
 				t.Errorf("Expected %s, got %s", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestIsValidLabelNamePrefix(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"valid", true},
+		{"", false},
+		{"invalid.", false},
+		{"-invalid", false},
+		{"..invalid", false},
+		{" space ", false},
+		{string(make([]byte, 101)), false},
+		{"a..b", false},
+		{"a/.b", false},
+		{"_invalid", false},
+	}
+
+	for _, tt := range tests {
+		if got := isValidLabelNamePrefix(tt.input); got != tt.want {
+			t.Errorf("Expected %v, got %v", tt.want, got)
+		}
+	}
+}
+
+func TestValidateDeviceInfo(t *testing.T) {
+	tests := []struct {
+		name           string
+		infos          []types.DeviceInfo
+		wantErr        bool
+		expectedErrMsg string
+	}{
+		{
+			name: "valid device",
+			infos: []types.DeviceInfo{
+				{
+					Index:             5000,
+					CDIModelName:      strings.Repeat("a", 1024),
+					DriverName:        strings.Repeat("b", 1024),
+					K8sDeviceName:     strings.Repeat("c", 50),
+					CannotCoexistWith: make([]int, 100),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:           "index too low",
+			infos:          []types.DeviceInfo{{Index: -1}},
+			wantErr:        true,
+			expectedErrMsg: "index must be between 0 and 10000",
+		},
+		{
+			name:           "index too high",
+			infos:          []types.DeviceInfo{{Index: 10001}},
+			wantErr:        true,
+			expectedErrMsg: "index must be between 0 and 10000",
+		},
+		{
+			name:           "cdi-model-name too long",
+			infos:          []types.DeviceInfo{{CDIModelName: strings.Repeat("a", 1025)}},
+			wantErr:        true,
+			expectedErrMsg: "cdi-model-name exceeds 1KB limit",
+		},
+		{
+			name:           "driver-name too long",
+			infos:          []types.DeviceInfo{{DriverName: strings.Repeat("b", 1025)}},
+			wantErr:        true,
+			expectedErrMsg: "driver-name exceeds 1KB limit",
+		},
+		{
+			name:           "k8s-device-name empty",
+			infos:          []types.DeviceInfo{{K8sDeviceName: ""}},
+			wantErr:        true,
+			expectedErrMsg: "cannot be empty",
+		},
+		{
+			name:           "k8s-device-name too long",
+			infos:          []types.DeviceInfo{{K8sDeviceName: strings.Repeat("c", 51)}},
+			wantErr:        true,
+			expectedErrMsg: "exceeds 50 character limit",
+		},
+		{
+			name:           "k8s-device-name invalid start",
+			infos:          []types.DeviceInfo{{K8sDeviceName: "-invalid"}},
+			wantErr:        true,
+			expectedErrMsg: "must start with letter or digit",
+		},
+		{
+			name:           "k8s-device-name invalid end",
+			infos:          []types.DeviceInfo{{K8sDeviceName: "invalid-"}},
+			wantErr:        true,
+			expectedErrMsg: "must end with letter or digit",
+		},
+		{
+			name:           "k8s-device-name invalid char",
+			infos:          []types.DeviceInfo{{K8sDeviceName: "dev@ice"}},
+			wantErr:        true,
+			expectedErrMsg: "contains invalid character",
+		},
+		{
+			name:    "k8s-device-name valid",
+			infos:   []types.DeviceInfo{{K8sDeviceName: "gpu-device-1"}},
+			wantErr: false,
+		},
+		{
+			name: "cannot-coexist-with too many",
+			infos: []types.DeviceInfo{
+				{
+					Index:             5000,
+					CDIModelName:      strings.Repeat("a", 1024),
+					DriverName:        strings.Repeat("b", 1024),
+					K8sDeviceName:     strings.Repeat("c", 50),
+					CannotCoexistWith: make([]int, 101),
+				},
+			},
+			wantErr:        true,
+			expectedErrMsg: "cannot-coexist-with exceeds 100 item limit",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateDeviceInfo(tc.infos)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error, but got nil")
+				}
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}

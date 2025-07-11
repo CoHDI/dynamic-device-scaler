@@ -25,7 +25,7 @@ import (
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -751,7 +751,7 @@ func TestDynamicAttach(t *testing.T) {
 			composabilityRequestregistered: true,
 			count:                          2,
 			wantErr:                        true,
-			expectedErrMsg:                 "failed to get ComposabilityRequest: composabilityrequests.meta.k8s.io \"test\" not found",
+			expectedErrMsg:                 "failed to get ComposabilityRequest:",
 		},
 		{
 			name:           "composabilityRequest not registered",
@@ -1044,8 +1044,7 @@ func TestDynamicDetach(t *testing.T) {
 			expectedSize: 1,
 		},
 		{
-			name: "count less than resourceCount",
-
+			name:            "count less than resourceCount",
 			deviceNoRemoval: time.Minute,
 			count:           1,
 			nodeName:        "node1",

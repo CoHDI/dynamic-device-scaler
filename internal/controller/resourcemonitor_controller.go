@@ -25,7 +25,7 @@ import (
 	"github.com/CoHDI/dynamic-device-scaler/internal/utils"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -37,7 +37,7 @@ import (
 // ResourceMonitorReconciler reconciles a ResourceMonitor object
 type ResourceMonitorReconciler struct {
 	client.Client
-	ClientSet          *kubernetes.Clientset
+	ClientSet          kubernetes.Interface
 	Scheme             *runtime.Scheme
 	ScanInterval       time.Duration
 	DeviceNoRemoval    time.Duration
@@ -88,6 +88,7 @@ func (r *ResourceMonitorReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: r.ScanInterval}, err
 }
 
+// collectInfo gathers information about resource claims, resource slices, nodes, and composable DRA specifications.
 func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.ResourceClaimInfo, []types.ResourceSliceInfo, []types.NodeInfo, types.ComposableDRASpec, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Start collecting information")
@@ -96,27 +97,28 @@ func (r *ResourceMonitorReconciler) collectInfo(ctx context.Context) ([]types.Re
 
 	composableDRASpec, err := utils.GetConfigMapInfo(ctx, r.ClientSet)
 	if err != nil {
-		return nil, nil, nil, composableDRASpec, err
+		return nil, nil, nil, composableDRASpec, fmt.Errorf("failed to get ComposableDRASpec from ConfigMap: %v", err)
 	}
 
 	resourceClaimInfos, err := utils.GetResourceClaimInfo(ctx, r.Client, composableDRASpec)
 	if err != nil {
-		return nil, nil, nil, composableDRASpec, err
+		return nil, nil, nil, composableDRASpec, fmt.Errorf("failed to get ResourceClaimInfo: %v", err)
 	}
 
 	resourceSliceInfos, err := utils.GetResourceSliceInfo(ctx, r.Client)
 	if err != nil {
-		return nil, nil, nil, composableDRASpec, err
+		return nil, nil, nil, composableDRASpec, fmt.Errorf("failed to get ResourceSliceInfo: %v", err)
 	}
 
 	nodeInfos, err := utils.GetNodeInfo(ctx, r.ClientSet, composableDRASpec)
 	if err != nil {
-		return nil, nil, nil, composableDRASpec, err
+		return nil, nil, nil, composableDRASpec, fmt.Errorf("failed to get NodeInfo: %v", err)
 	}
 
 	return resourceClaimInfos, resourceSliceInfos, nodeInfos, composableDRASpec, nil
 }
 
+// updateComposableResourceLastUsedTime updates the last used time of ComposableResources based on their usage.
 func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx context.Context, resourceSliceInfos []types.ResourceSliceInfo, labelPrefix string) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Start updating ComposableResource last used time")
@@ -132,7 +134,7 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 			if isRed {
 				isUsed, err := utils.IsDeviceUsedByPod(ctx, r.Client, deviceName, *resourceSliceInfo)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to check if device is used by pod: %w", err)
 				}
 				if isUsed {
 					currentTime := time.Now().Format(time.RFC3339)
@@ -147,6 +149,7 @@ func (r *ResourceMonitorReconciler) updateComposableResourceLastUsedTime(ctx con
 	return nil
 }
 
+// handleNodes processes the node and updates the resource claims and slices accordingly.
 func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos []types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Start handling nodes")
@@ -166,35 +169,36 @@ func (r *ResourceMonitorReconciler) handleNodes(ctx context.Context, nodeInfos [
 
 		nodeResourceClaimInfos, err = utils.RescheduleFailedNotification(ctx, r.Client, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to reschedule failed notification: %v", err)
 		}
 
 		nodeResourceClaimInfos, err = utils.RescheduleNotification(ctx, r.Client, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec.LabelPrefix, r.DeviceNoAllocation)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to reschedule notification: %v", err)
 		}
 
 		err = r.handleDevices(ctx, nodeInfo, nodeResourceClaimInfos, resourceSliceInfos, composableDRASpec)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to handle devices: %v", err)
 		}
 
 		err = utils.UpdateNodeLabel(ctx, r.Client, r.ClientSet, nodeInfo.Name, composableDRASpec)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to update node label: %v", err)
 		}
 	}
 
 	return nil
 }
 
+// handleDevices processes the device and updates the resource claims and slices accordingly.
 func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo types.NodeInfo, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo, composableDRASpec types.ComposableDRASpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start handling node devices")
 
 	composabilityRequestList := &cdioperator.ComposabilityRequestList{}
 	if err := r.List(ctx, composabilityRequestList, &client.ListOptions{}); err != nil {
-		return err
+		return fmt.Errorf("failed to list ComposabilityRequestList: %v", err)
 	}
 
 	var actualCount int64
@@ -207,17 +211,21 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 
 		cofiguredDeviceCount, err := utils.GetConfiguredDeviceCount(ctx, r.Client, device.CDIModelName, nodeInfo.Name, resourceClaimInfos, resourceSliceInfos)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get configured device count: %v", err)
 		}
 
-		logger.Info("Configured devices count", "count", cofiguredDeviceCount)
+		logger.V(1).Info("Configured devices count", "count", cofiguredDeviceCount)
 
-		_, minCountLimit := utils.GetModelLimit(nodeInfo, device.CDIModelName)
+		maxCountLimit, minCountLimit := utils.GetModelLimit(nodeInfo, device.CDIModelName)
+		if cofiguredDeviceCount > maxCountLimit {
+			return fmt.Errorf("configured device count %d exceeds max limit %d", cofiguredDeviceCount, maxCountLimit)
+		}
+
 		if cofiguredDeviceCount < minCountLimit {
 			cofiguredDeviceCount = minCountLimit
 		}
 
-		logger.Info("Actual cofiguredDeviceCount", "count", cofiguredDeviceCount)
+		logger.V(1).Info("Actual cofiguredDeviceCount", "count", cofiguredDeviceCount)
 
 		for _, cr := range composabilityRequestList.Items {
 			if cr.Spec.Resource.Model == device.CDIModelName && cr.Spec.Resource.TargetNode == nodeInfo.Name {
@@ -225,12 +233,12 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 				if cofiguredDeviceCount > actualCount {
 					err := utils.DynamicAttach(ctx, r.Client, &cr, cofiguredDeviceCount, cr.Spec.Resource.Type, device.CDIModelName, nodeInfo.Name)
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to attach devices: %v", err)
 					}
 				} else if cofiguredDeviceCount < actualCount {
 					err := utils.DynamicDetach(ctx, r.Client, &cr, cofiguredDeviceCount, nodeInfo.Name, composableDRASpec.LabelPrefix, r.DeviceNoRemoval)
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to detach devices: %v", err)
 					}
 				}
 				requestExit = true
@@ -242,7 +250,7 @@ func (r *ResourceMonitorReconciler) handleDevices(ctx context.Context, nodeInfo 
 			resourceType := utils.GetDriverType(device.DriverName)
 			err := utils.DynamicAttach(ctx, r.Client, nil, cofiguredDeviceCount, resourceType, device.CDIModelName, nodeInfo.Name)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to attach devices: %v", err)
 			}
 		}
 	}
