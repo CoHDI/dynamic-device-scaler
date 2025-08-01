@@ -24,7 +24,7 @@ import (
 
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -35,6 +35,7 @@ import (
 
 const maxRetries = 2
 
+// patchNodeLabel patches the labels of a node.
 func patchNodeLabel(clientset kubernetes.Interface, nodeName string, addLabels, deleteLabels []string) error {
 	var lastErr error
 
@@ -80,6 +81,7 @@ func patchNodeLabel(clientset kubernetes.Interface, nodeName string, addLabels, 
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
 }
 
+// PatchComposableResourceAnnotation patches the annotation of a ComposableResource.
 func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Client, resourceName, key, value string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -139,6 +141,7 @@ func PatchComposableResourceAnnotation(ctx context.Context, kubeClient client.Cl
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
 }
 
+// PatchComposabilityRequestSize patches the size of a ComposabilityRequest.
 func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client, requestName string, count int64) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -185,6 +188,7 @@ func PatchComposabilityRequestSize(ctx context.Context, kubeClient client.Client
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
 }
 
+// PatchResourceClaimDeviceConditions patches the device conditions of a ResourceClaim.
 func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.Client, name, namespace, conditionType string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -273,6 +277,7 @@ func PatchResourceClaimDeviceConditions(ctx context.Context, kubeClient client.C
 	return fmt.Errorf("max retries (%d) reached, last error: %v", maxRetries, lastErr)
 }
 
+// UpdateNodeLabel updates the labels of a node.
 func UpdateNodeLabel(ctx context.Context, kubeClient client.Client, clientSet kubernetes.Interface, nodeName string, composableDRASpec types.ComposableDRASpec) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start updating Node label")

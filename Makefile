@@ -1,6 +1,6 @@
-PROJECT_NAME ?= dynamic-device-scaler
-VERSION ?= v0.1.0
-IMG ?= localhost/$(PROJECT_NAME):$(VERSION)
+IMG_NAME ?= dds
+IMG_TAG ?= latest
+IMG ?= $(IMG_NAME):$(IMG_TAG)
 
 # Directories
 LOCALBIN ?= $(shell pwd)/bin

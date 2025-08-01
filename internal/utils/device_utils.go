@@ -23,12 +23,13 @@ import (
 
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
-	resourceapi "k8s.io/api/resource/v1beta1"
+	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// GetConfiguredDeviceCount returns the total number of configured devices for a specific model and node.
 func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, model, nodeName string, resourceClaimInfos []types.ResourceClaimInfo, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(1).Info("Start getting configured device count")
@@ -45,6 +46,7 @@ func GetConfiguredDeviceCount(ctx context.Context, kubeClient client.Client, mod
 	return preparingAndRescheduleDeviceCount + podAllocatedDevicesCount, nil
 }
 
+// getPreparingRescheduleDevicesCount returns the count of devices in preparing or reschedule state for a specific model and node.
 func getPreparingRescheduleDevicesCount(resourceClaimInfos []types.ResourceClaimInfo, model, nodeName string) int64 {
 	var count int64
 
@@ -62,6 +64,7 @@ func getPreparingRescheduleDevicesCount(resourceClaimInfos []types.ResourceClaim
 	return count
 }
 
+// getPodAllocatedDevicesCount returns the count of devices allocated to pods for a specific model and node.
 func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, model, nodeName string, resourceSliceInfos []types.ResourceSliceInfo) (int64, error) {
 	var count int64
 
@@ -93,6 +96,7 @@ func getPodAllocatedDevicesCount(ctx context.Context, kubeClient client.Client, 
 	return count, nil
 }
 
+// IsDeviceUsedByPod checks if a device is used by a pod.
 func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceName string, resourceSliceInfo types.ResourceSliceInfo) (bool, error) {
 	resourceClaimList := &resourceapi.ResourceClaimList{}
 	if err := kubeClient.List(ctx, resourceClaimList, &client.ListOptions{}); err != nil {
@@ -114,6 +118,7 @@ func IsDeviceUsedByPod(ctx context.Context, kubeClient client.Client, deviceName
 	return false, nil
 }
 
+// IsDeviceResourceSliceRed checks if a device is in a red state within a resource slice.
 func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.ResourceSliceInfo) (bool, *types.ResourceSliceInfo, string) {
 	for _, resourceSlice := range resourceSliceInfos {
 		for _, resourceSliceDevice := range resourceSlice.Devices {
@@ -126,6 +131,7 @@ func IsDeviceResourceSliceRed(deviceID string, resourceSliceInfos []types.Resour
 	return false, nil, ""
 }
 
+// DynamicAttach dynamically attaches resources to a ComposabilityRequest.
 func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, resourceType, model, nodeName string) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Start dynamic attach")
@@ -137,6 +143,7 @@ func DynamicAttach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 	return PatchComposabilityRequestSize(ctx, kubeClient, cr.Name, count)
 }
 
+// createNewComposabilityRequestCR creates a new ComposabilityRequest custom resource.
 func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Client, count int64, resourceType, model, node string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -165,6 +172,7 @@ func createNewComposabilityRequestCR(ctx context.Context, kubeClient client.Clie
 	return nil
 }
 
+// DynamicDetach dynamically detaches resources from a ComposabilityRequest.
 func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperator.ComposabilityRequest, count int64, nodeName, labelPrefix string, deviceNoRemoval time.Duration) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Start dynamic detach")
@@ -181,6 +189,7 @@ func DynamicDetach(ctx context.Context, kubeClient client.Client, cr *cdioperato
 	return nil
 }
 
+// getNextSize calculates the next size for a ComposabilityRequest based on the current resource usage.
 func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nodeName, labelPrefix string, deviceNoRemoval time.Duration) (int64, error) {
 	resourceList := &cdioperator.ComposableResourceList{}
 	if err := kubeClient.List(ctx, resourceList, &client.ListOptions{}); err != nil {
@@ -191,7 +200,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nod
 	for _, resource := range resourceList.Items {
 		if (resource.Status.State == "Online" || resource.Status.State == "Attaching") &&
 			resource.Spec.TargetNode == nodeName && resource.DeletionTimestamp == nil {
-			over, err := isLastUsedOverThreshold(resource, labelPrefix, deviceNoRemoval, false)
+			over, err := isLastUsedOverThreshold(resource, labelPrefix, deviceNoRemoval, true)
 			if err != nil {
 				return 0, err
 			}
@@ -209,6 +218,7 @@ func getNextSize(ctx context.Context, kubeClient client.Client, count int64, nod
 	return resourceCount, nil
 }
 
+// GetDriverType returns the driver type for a specific model.
 func GetDriverType(model string) string {
 	switch model {
 	case "gpu.nvidia.com":
