@@ -1335,6 +1335,93 @@ func TestHandleDevices(t *testing.T) {
 			expectedErrMsg: "failed to get configured device count:",
 		},
 		{
+			name: "configured device count exceeds max limit",
+			nodeInfo: types.NodeInfo{
+				Name: "node1",
+				Models: []types.ModelConstraints{
+					{
+						Model:        "A100 40G",
+						DeviceName:   "nvidia-a100-40g",
+						MaxDevice:    1,
+						MinDevice:    1,
+						MaxDeviceSet: true,
+					},
+				},
+			},
+			resourceClaimInfo: []types.ResourceClaimInfo{
+				{
+					Name:      "test-claim-1",
+					Namespace: "default",
+					NodeName:  "node1",
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:              "gpu0",
+							State:             "Preparing",
+							Model:             "A100 40G",
+							ResourceSliceName: "test-resourceslice-1",
+						},
+						{
+							Name:              "gpu1",
+							State:             "Preparing",
+							Model:             "A100 40G",
+							ResourceSliceName: "test-resourceslice-1",
+						},
+					},
+				},
+			},
+			resourceSliceInfo: []types.ResourceSliceInfo{
+				{
+					Name:     "test-resourceslice-1",
+					NodeName: "node1",
+					Driver:   "gpu.nvidia.com",
+					Pool:     "test-pool",
+					Devices: []types.ResourceSliceDevice{
+						{
+							Name: "gpu0",
+							UUID: "1234",
+						},
+						{
+							Name: "gpu1",
+							UUID: "5678",
+						},
+					},
+				},
+			},
+			composableDRASpec: types.ComposableDRASpec{
+				LabelPrefix: "composable.fsastech.com",
+				DeviceInfos: []types.DeviceInfo{
+					{
+						Index:         1,
+						CDIModelName:  "A100 40G",
+						K8sDeviceName: "nvidia-a100-40g",
+						DRAAttributes: map[string]string{
+							"productName": "NVIDIA A100 40GB",
+						},
+					},
+				},
+			},
+			existingRequestList: &cdioperator.ComposabilityRequestList{
+				Items: []cdioperator.ComposabilityRequest{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-request-1",
+						},
+						Spec: cdioperator.ComposabilityRequestSpec{
+							Resource: cdioperator.ScalarResourceDetails{
+								Type:       "gpu",
+								Model:      "A100 40G",
+								TargetNode: "node1",
+								Size:       1,
+							},
+						},
+					},
+				},
+			},
+			existingResourceList: &cdioperator.ComposableResourceList{},
+			wantErr:              true,
+			expectedErrMsg:       "configured device count 2 exceeds max limit 1",
+		},
+		{
 			name: "attach devices",
 			nodeInfo: types.NodeInfo{
 				Name: "node1",
