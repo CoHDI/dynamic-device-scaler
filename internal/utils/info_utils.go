@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -69,19 +70,22 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 			var deviceInfo types.ResourceClaimDevice
 
 			deviceInfo.Name = device.Device
+			deviceInfo.Driver = device.Driver
+			deviceInfo.Pool = device.Pool
 
 		ResourceSliceLoop:
 			for _, rs := range resourceSliceList.Items {
 				if rs.Spec.Driver == device.Driver && rs.Spec.Pool.Name == device.Pool {
 					for _, resourceSliceDevice := range rs.Spec.Devices {
 						if resourceSliceDevice.Name == device.Device {
-							model, err := getModelName(composableDRASpec, "", *resourceSliceDevice.Attributes["productName"].StringValue)
-							logger.Info("Found model name for device", "device", device.Device, "model", model)
+							re := regexp.MustCompile(`-fabric\d+$`)
+							deviceName := re.ReplaceAllString(device.Pool, "")
+							model, err := getModelName(composableDRASpec, deviceName)
 							if err != nil {
 								return nil, err
 							}
+							logger.Info("Found model name for device", "device", device.Device, "model", model)
 							deviceInfo.Model = model
-							deviceInfo.ResourceSliceName = rs.Name
 							break ResourceSliceLoop
 						}
 					}
@@ -217,7 +221,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				deviceName := suffix[:len(suffix)-9]
-				model, err := getModelName(composableDRASpec, deviceName, "")
+				model, err := getModelName(composableDRASpec, deviceName)
 				if err != nil {
 					return nil, err
 				}
@@ -251,7 +255,7 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 				}
 
 				deviceName := suffix[:len(suffix)-9]
-				model, err := getModelName(composableDRASpec, deviceName, "")
+				model, err := getModelName(composableDRASpec, deviceName)
 				if err != nil {
 					return nil, err
 				}
@@ -286,20 +290,10 @@ func processNodeInfo(nodes *v1.NodeList, composableDRASpec types.ComposableDRASp
 }
 
 // getModelName retrieves the model name for a specific device.
-func getModelName(composableDRASpec types.ComposableDRASpec, deviceName, productName string) (string, error) {
-	if deviceName != "" {
-		for _, deviceInfo := range composableDRASpec.DeviceInfos {
-			if deviceInfo.K8sDeviceName == deviceName {
-				return deviceInfo.CDIModelName, nil
-			}
-		}
-	}
-
-	if productName != "" {
-		for _, deviceInfo := range composableDRASpec.DeviceInfos {
-			if deviceInfo.DRAAttributes["productName"] == productName {
-				return deviceInfo.CDIModelName, nil
-			}
+func getModelName(composableDRASpec types.ComposableDRASpec, deviceName string) (string, error) {
+	for _, deviceInfo := range composableDRASpec.DeviceInfos {
+		if deviceInfo.K8sDeviceName == deviceName {
+			return deviceInfo.CDIModelName, nil
 		}
 	}
 

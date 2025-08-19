@@ -27,8 +27,9 @@ type ResourceClaimInfo struct {
 }
 
 type ResourceClaimDevice struct {
-	Name              string `json:"name"`
-	Model             string `json:"model"`
-	State             string `json:"state"`
-	ResourceSliceName string `json:"resource_slice_name"`
+	Name   string `json:"name"`
+	Model  string `json:"model"`
+	State  string `json:"state"`
+	Driver string `json:"driver"`
+	Pool   string `json:"pool"`
 }
