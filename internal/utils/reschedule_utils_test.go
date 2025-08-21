@@ -377,16 +377,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 80G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 80G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -425,7 +427,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			expectedErrMsg: "failed to list composabilityRequestList:",
 		},
 		{
-			name: "failed to get resourceSlice",
+			name: "failed to list resourceSlice",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
@@ -484,11 +486,11 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
-						},
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool"},
 					},
 				},
 			},
@@ -507,7 +509,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 				},
 			},
 			wantErr:        true,
-			expectedErrMsg: "failed to get resourceSlice:",
+			expectedErrMsg: "failed to list ResourceSlices:",
 		},
 		{
 			name: "setDevicesState failed",
@@ -569,16 +571,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 80G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 80G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -604,6 +608,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu0",
@@ -651,16 +659,17 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 80G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 80G",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -697,6 +706,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu0",
@@ -738,16 +751,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 80G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 80G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -788,16 +803,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 80G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 80G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -834,6 +851,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "gpu0",
@@ -904,16 +925,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -950,6 +973,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -995,16 +1022,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1045,16 +1074,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1091,6 +1122,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1158,16 +1193,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1204,6 +1241,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1249,16 +1290,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1292,16 +1335,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1338,6 +1383,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1397,16 +1446,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1443,6 +1494,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1503,16 +1558,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1538,16 +1595,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1584,6 +1643,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1644,16 +1707,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1679,16 +1744,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1725,6 +1792,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1780,7 +1851,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			expectedErrMsg: "failed to set devices state:",
 		},
 		{
-			name: "ResourceClaimInfo devices do not coexist",
+			name: "ResourceClaimInfo devices do not coexist and set failed",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
@@ -1814,16 +1885,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1834,9 +1907,11 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:  "device-1",
-							Model: "A100 80G",
-							State: "Preparing",
+							Name:   "device-1",
+							Model:  "A100 80G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1848,6 +1923,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -1946,16 +2025,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -1980,6 +2061,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -2070,16 +2155,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2133,16 +2220,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2167,6 +2256,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -2236,16 +2329,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2299,16 +2394,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2320,6 +2417,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-3",
@@ -2386,16 +2487,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Failed",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Failed",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2436,16 +2539,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2457,6 +2562,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-3",
@@ -2542,16 +2651,18 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "device-1",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 						{
-							Name:              "device-2",
-							Model:             "A100 40G",
-							State:             "Preparing",
-							ResourceSliceName: "test-rs",
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
 						},
 					},
 				},
@@ -2588,6 +2699,10 @@ func TestRescheduleFailedNotification(t *testing.T) {
 							Name: "test-rs",
 						},
 						Spec: resourceapi.ResourceSliceSpec{
+							Pool: resourceapi.ResourcePool{
+								Name: "test-pool",
+							},
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
 									Name: "device-1",
@@ -2638,6 +2753,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					clientObjects = append(clientObjects, &tc.existingResourceClaimList.Items[i])
 				}
 			}
+
 			if tc.existingResourceSliceList != nil {
 				s.AddKnownTypes(metav1.SchemeGroupVersion, &resourceapi.ResourceSlice{}, &resourceapi.ResourceSliceList{})
 				for i := range tc.existingResourceSliceList.Items {

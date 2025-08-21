@@ -55,7 +55,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					{
 						Index:         1,
 						CDIModelName:  "A100 80G",
-						K8sDeviceName: "nvidia-a100-80g",
+						K8sDeviceName: "nvidia-a100-80",
 						DRAAttributes: map[string]string{
 							"productName": "NVIDIA A100 80GB",
 						},
@@ -81,8 +81,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							Devices: []resourceapi.AllocatedDeviceStatus{
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-1",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu0",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceReschedule",
@@ -92,8 +92,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-2",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu1",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceFailed",
@@ -103,8 +103,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-3",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu2",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "test-condition",
@@ -117,21 +117,21 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device:            "gpu-1",
+											Device:            "nvidia-a100-80-gpu0",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceReschedule"},
 										},
 										{
-											Device:            "gpu-2",
+											Device:            "nvidia-a100-80-gpu1",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceFailed"},
 										},
 										{
-											Device:            "gpu-3",
+											Device:            "nvidia-a100-80-gpu2",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"test"},
 										},
 									},
@@ -162,26 +162,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-80-fabric1",
 							},
 						},
 					},
@@ -195,20 +186,24 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "gpu-1",
-							State:             "Reschedule",
-							Model:             "A100 80G",
-							ResourceSliceName: "test-resourceslice-1",
+							Name:   "nvidia-a100-80-gpu0",
+							State:  "Reschedule",
+							Model:  "A100 80G",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 						{
-							Name:              "gpu-2",
-							State:             "Failed",
-							Model:             "A100 80G",
-							ResourceSliceName: "test-resourceslice-1",
+							Name:   "nvidia-a100-80-gpu1",
+							State:  "Failed",
+							Model:  "A100 80G",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 						{
-							Name:  "gpu-3",
-							State: "Preparing",
+							Name:   "nvidia-a100-80-gpu2",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 					},
 				},
@@ -222,7 +217,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					{
 						Index:         1,
 						CDIModelName:  "A100 80G",
-						K8sDeviceName: "nvidia-a100-80g",
+						K8sDeviceName: "nvidia-a100-80",
 						DRAAttributes: map[string]string{
 							"productName": "NVIDIA A100 80GB",
 						},
@@ -242,8 +237,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							Devices: []resourceapi.AllocatedDeviceStatus{
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-1",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu0",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceReschedule",
@@ -253,8 +248,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-2",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu1",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceFailed",
@@ -264,8 +259,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-3",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu2",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "test-condition",
@@ -278,21 +273,21 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device:            "gpu-1",
+											Device:            "nvidia-a100-80-gpu0",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceReschedule"},
 										},
 										{
-											Device:            "gpu-2",
+											Device:            "nvidia-a100-80-gpu1",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceFailed"},
 										},
 										{
-											Device:            "gpu-3",
+											Device:            "nvidia-a100-80-gpu2",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"test"},
 										},
 									},
@@ -323,26 +318,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-80-fabric1",
 							},
 						},
 					},
@@ -357,7 +343,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					{
 						Index:         1,
 						CDIModelName:  "A100 80G",
-						K8sDeviceName: "nvidia-a100-80g",
+						K8sDeviceName: "nvidia-a100-80",
 						DRAAttributes: map[string]string{
 							"productName": "NVIDIA A100 80GB",
 						},
@@ -383,13 +369,13 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							Devices: []resourceapi.AllocatedDeviceStatus{
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-0",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu0",
+									Pool:   "nvidia-a100-80-fabric1",
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-1",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu1",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceReschedule",
@@ -399,8 +385,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-2",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu1",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "FabricDeviceFailed",
@@ -410,8 +396,8 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								},
 								{
 									Driver: "gpu.nvidia.com",
-									Device: "gpu-3",
-									Pool:   "test-pool",
+									Device: "nvidia-a100-80-gpu2",
+									Pool:   "nvidia-a100-80-fabric1",
 									Conditions: []metav1.Condition{
 										{
 											Type:   "test-condition",
@@ -424,19 +410,19 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device: "gpu-1",
+											Device: "nvidia-a100-80-gpu0",
 											Driver: "gpu.nvidia.com",
-											Pool:   "test-pool",
+											Pool:   "nvidia-a100-80-fabric1",
 										},
 										{
-											Device: "gpu-2",
+											Device: "nvidia-a100-80-gpu1",
 											Driver: "gpu.nvidia.com",
-											Pool:   "test-pool",
+											Pool:   "nvidia-a100-80-fabric1",
 										},
 										{
-											Device: "gpu-3",
+											Device: "nvidia-a100-80-gpu2",
 											Driver: "gpu.nvidia.com",
-											Pool:   "test-pool",
+											Pool:   "nvidia-a100-80-fabric1",
 										},
 									},
 								},
@@ -466,26 +452,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-80-fabric1",
 							},
 						},
 					},
@@ -500,7 +477,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					{
 						Index:         1,
 						CDIModelName:  "A100 80G",
-						K8sDeviceName: "nvidia-a100-80g",
+						K8sDeviceName: "nvidia-a100-80",
 						DRAAttributes: map[string]string{
 							"productName": "NVIDIA A100 80GB",
 						},
@@ -527,21 +504,21 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device:            "gpu-1",
+											Device:            "nvidia-a100-80-gpu0",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceReschedule"},
 										},
 										{
-											Device:            "gpu-2",
+											Device:            "nvidia-a100-80-gpu1",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceFailed"},
 										},
 										{
-											Device:            "gpu-3",
+											Device:            "nvidia-a100-80-gpu2",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"test"},
 										},
 									},
@@ -572,26 +549,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA A100 80GB")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-80-fabric1",
 							},
 						},
 					},
@@ -605,20 +573,24 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					CreationTimestamp: metav1.Time{Time: now.Truncate(time.Second)},
 					Devices: []types.ResourceClaimDevice{
 						{
-							Name:              "gpu-1",
-							State:             "Preparing",
-							Model:             "A100 80G",
-							ResourceSliceName: "test-resourceslice-1",
+							Name:   "nvidia-a100-80-gpu0",
+							State:  "Preparing",
+							Model:  "A100 80G",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 						{
-							Name:              "gpu-2",
-							State:             "Preparing",
-							Model:             "A100 80G",
-							ResourceSliceName: "test-resourceslice-1",
+							Name:   "nvidia-a100-80-gpu1",
+							State:  "Preparing",
+							Model:  "A100 80G",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 						{
-							Name:  "gpu-3",
-							State: "Preparing",
+							Name:   "nvidia-a100-80-gpu2",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "nvidia-a100-80-fabric1",
 						},
 					},
 				},
@@ -632,7 +604,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 					{
 						Index:         1,
 						CDIModelName:  "A100 80G",
-						K8sDeviceName: "nvidia-a100-80g",
+						K8sDeviceName: "nvidia-a100-80",
 						DRAAttributes: map[string]string{
 							"productName": "NVIDIA A100 80GB",
 						},
@@ -659,21 +631,21 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device:            "gpu-1",
+											Device:            "nvidia-a100-80-gpu0",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-40-fabric1",
 											BindingConditions: []string{"FabricDeviceReschedule"},
 										},
 										{
-											Device:            "gpu-2",
+											Device:            "nvidia-a100-80-gpu1",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-40-fabric1",
 											BindingConditions: []string{"FabricDeviceFailed"},
 										},
 										{
-											Device:            "gpu-3",
+											Device:            "nvidia-a100-80-gpu2",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-40-fabric1",
 											BindingConditions: []string{"test"},
 										},
 									},
@@ -704,26 +676,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA Test")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA Test")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-40-fabric1",
 							},
 						},
 					},
@@ -742,26 +705,17 @@ func TestGetResourceClaimInfo(t *testing.T) {
 							CreationTimestamp: metav1.Time{Time: now},
 						},
 						Spec: resourceapi.ResourceSliceSpec{
-							Driver:   "gpu.nvidia.com",
-							NodeName: ptr.To("node1"),
+							Driver: "gpu.nvidia.com",
 							Devices: []resourceapi.Device{
 								{
-									Name: "gpu-1",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("1234")},
-										"productName": {StringValue: ptr.To("NVIDIA Test")},
-									},
+									Name: "nvidia-a100-80-gpu0",
 								},
 								{
-									Name: "gpu-2",
-									Attributes: map[resourceapi.QualifiedName]resourceapi.DeviceAttribute{
-										"uuid":        {StringValue: ptr.To("5678")},
-										"productName": {StringValue: ptr.To("NVIDIA Test")},
-									},
+									Name: "nvidia-a100-80-gpu1",
 								},
 							},
 							Pool: resourceapi.ResourcePool{
-								Name: "test-pool",
+								Name: "nvidia-a100-80-fabric1",
 							},
 						},
 					},
@@ -792,21 +746,21 @@ func TestGetResourceClaimInfo(t *testing.T) {
 								Devices: resourceapi.DeviceAllocationResult{
 									Results: []resourceapi.DeviceRequestAllocationResult{
 										{
-											Device:            "gpu-1",
+											Device:            "nvidia-a100-80-gpu0",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceReschedule"},
 										},
 										{
-											Device:            "gpu-2",
+											Device:            "nvidia-a100-80-gpu1",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"FabricDeviceFailed"},
 										},
 										{
-											Device:            "gpu-3",
+											Device:            "nvidia-a100-80-gpu2",
 											Driver:            "gpu.nvidia.com",
-											Pool:              "test-pool",
+											Pool:              "nvidia-a100-80-fabric1",
 											BindingConditions: []string{"test"},
 										},
 									},
@@ -1360,7 +1314,6 @@ func TestGetModelName(t *testing.T) {
 	tests := []struct {
 		name              string
 		deviceName        string
-		productName       string
 		composableDRASpec types.ComposableDRASpec
 		wantErr           bool
 		expectedErrMsg    string
@@ -1395,28 +1348,11 @@ func TestGetModelName(t *testing.T) {
 			},
 			expectedResult: "A100 40G",
 		},
-		{
-			name:        "normal product name",
-			productName: "NVIDIA A100 40GB PCIe",
-			composableDRASpec: types.ComposableDRASpec{
-				DeviceInfos: []types.DeviceInfo{
-					{
-						Index:         1,
-						CDIModelName:  "A100 40G",
-						K8sDeviceName: "nvidia-a100-40",
-						DRAAttributes: map[string]string{
-							"productName": "NVIDIA A100 40GB PCIe",
-						},
-					},
-				},
-			},
-			expectedResult: "A100 40G",
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := getModelName(tc.composableDRASpec, tc.deviceName, tc.productName)
+			result, err := getModelName(tc.composableDRASpec, tc.deviceName)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error but got nil")

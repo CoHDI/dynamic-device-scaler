@@ -135,6 +135,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	setupLog.Info("Loaded environment variables",
+		"SCAN_INTERVAL", scanInterval,
+		"DEVICE_NO_REMOVAL_DURATION", deviceNoRemoval,
+		"DEVICE_NO_ALLOCATION_DURATION", deviceNoAllocation)
+
 	if err = (&controller.ResourceMonitorReconciler{
 		Client:             mgr.GetClient(),
 		ClientSet:          clientSet,

@@ -27,7 +27,6 @@ import (
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
 	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	resourceapi "k8s.io/api/resource/v1"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -61,9 +60,15 @@ func RescheduleFailedNotification(ctx context.Context, kubeClient client.Client,
 		return resourceClaimInfos, fmt.Errorf("failed to list composableResource: %v", err)
 	}
 
+	resourceSliceList := &resourceapi.ResourceSliceList{}
+	if err := kubeClient.List(ctx, resourceSliceList, &client.ListOptions{}); err != nil {
+		return resourceClaimInfos, fmt.Errorf("failed to list ResourceSlices: %v", err)
+	}
+
 	sortByTime(resourceClaimInfos, "Descending")
 
 	var err error
+	var exit bool
 
 outerLoop:
 	for k, rc := range resourceClaimInfos {
@@ -74,6 +79,9 @@ outerLoop:
 			for j, otherDevice := range rc.Devices {
 				if i != j && rcDevice.Model != otherDevice.Model {
 					if !isDeviceCoexistence(rcDevice.Model, otherDevice.Model, composableDRASpec) {
+						logger.V(1).Info("Setting FabricDeviceFailed to Failed due to incompatibility between devices",
+							"rcDevice", rcDevice.Model,
+							"otherDevice", otherDevice.Model)
 						resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 						if err != nil {
 							return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -83,18 +91,20 @@ outerLoop:
 				}
 			}
 
-			resourceSlice := &resourceapi.ResourceSlice{}
-			if err := kubeClient.Get(ctx, k8stypes.NamespacedName{Name: rcDevice.ResourceSliceName}, resourceSlice); err != nil {
-				return resourceClaimInfos, fmt.Errorf("failed to get resourceSlice: %w", err)
-			}
-			exit := false
-			for _, resourceSliceDevice := range resourceSlice.Spec.Devices {
-				if rcDevice.Name == resourceSliceDevice.Name {
-					exit = true
-					break
+			exit = false
+		rsLoop:
+			for _, rs := range resourceSliceList.Items {
+				if rs.Spec.NodeName == nil && rs.Spec.Driver == rcDevice.Driver && rs.Spec.Pool.Name == rcDevice.Pool {
+					for _, resourceSliceDevice := range rs.Spec.Devices {
+						if resourceSliceDevice.Name == rcDevice.Name {
+							exit = true
+							break rsLoop
+						}
+					}
 				}
 			}
 			if !exit {
+				logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device was not found in resourceSlice", "device", rcDevice.Name)
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 				if err != nil {
 					return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -106,6 +116,10 @@ outerLoop:
 				if composabilityRequest.Spec.Resource.Size > 0 &&
 					composabilityRequest.Spec.Resource.TargetNode == rc.NodeName {
 					if !isDeviceCoexistence(rcDevice.Model, composabilityRequest.Spec.Resource.Model, composableDRASpec) {
+						logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device is incompatible with composability request resource model",
+							"device", rcDevice.Name,
+							"deviceModel", rcDevice.Model,
+							"composabilityRequestResourceModel", composabilityRequest.Spec.Resource.Model)
 						resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 						if err != nil {
 							return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -119,6 +133,11 @@ outerLoop:
 				if (resource.Status.State == "Online" || resource.Status.State == "Attaching") &&
 					resource.Spec.TargetNode == rc.NodeName {
 					if !isDeviceCoexistence(rcDevice.Model, resource.Spec.Model, composableDRASpec) {
+						logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device is incompatible with resource model",
+							"device", rcDevice.Name,
+							"deviceModel", rcDevice.Model,
+							"resourceModel", resource.Spec.Model,
+							"resourceState", resource.Status.State)
 						resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 						if err != nil {
 							return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -133,10 +152,22 @@ outerLoop:
 					for _, rc2Device := range rc2.Devices {
 						if rc2Device.State == "Preparing" && rcDevice.Model != rc2Device.Model {
 							if !isDeviceCoexistence(rcDevice.Model, rc2Device.Model, composableDRASpec) {
+								logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device is incompatible with another device in resource claim",
+									"device1", rcDevice.Name,
+									"device1Model", rcDevice.Model,
+									"device2", rc2Device.Name,
+									"device2Model", rc2Device.Model,
+									"resourceClaim", rc2.Name)
 								resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 								if err != nil {
 									return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
 								}
+								logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device is incompatible with another device in resource claim",
+									"device1", rcDevice.Name,
+									"device1Model", rcDevice.Model,
+									"device2", rc2Device.Name,
+									"device2Model", rc2Device.Model,
+									"resourceClaim", rc2.Name)
 								resourceClaimInfos[i], err = setDevicesState(ctx, kubeClient, rc2, "Failed", "FabricDeviceFailed")
 								if err != nil {
 									return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -158,6 +189,10 @@ outerLoop:
 			maxDevice, _ := GetModelLimit(node, model)
 
 			if configuredDeviceCount > maxDevice {
+				logger.V(1).Info("Setting FabricDeviceFailed to Failed due to configured device count exceeds maximum limit",
+					"configuredDeviceCount", configuredDeviceCount,
+					"model", model,
+					"maxDeviceLimit", maxDevice)
 				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
 				if err != nil {
 					return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
@@ -316,10 +351,19 @@ func isLastUsedOverThreshold(resource cdioperator.ComposableResource, labelPrefi
 
 // isDeviceCoexistence checks if two device models can coexist based on the ComposableDRASpec.
 func isDeviceCoexistence(model1, model2 string, composableDRASpec types.ComposableDRASpec) bool {
-	for i := range composableDRASpec.DeviceInfos {
-		if composableDRASpec.DeviceInfos[i].CDIModelName == model1 {
-			for _, j := range composableDRASpec.DeviceInfos[i].CannotCoexistWith {
-				if composableDRASpec.DeviceInfos[j-1].CDIModelName == model2 {
+	if model1 == model2 {
+		return true
+	}
+
+	indexToModel := make(map[int]string)
+	for _, deviceInfo := range composableDRASpec.DeviceInfos {
+		indexToModel[deviceInfo.Index] = deviceInfo.CDIModelName
+	}
+
+	for _, deviceInfo := range composableDRASpec.DeviceInfos {
+		if deviceInfo.CDIModelName == model1 {
+			for _, idx := range deviceInfo.CannotCoexistWith {
+				if model, exists := indexToModel[idx]; exists && model == model2 {
 					return false
 				}
 			}
