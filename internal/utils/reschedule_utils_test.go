@@ -2988,8 +2988,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "123",
+							State:    "Online",
+							DeviceID: "123",
 						},
 					},
 					{
@@ -3005,8 +3005,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "456",
+							State:    "Online",
+							DeviceID: "456",
 						},
 					},
 				},
@@ -3106,8 +3106,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "123",
+							State:    "Online",
+							DeviceID: "123",
 						},
 					},
 					{
@@ -3123,8 +3123,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "456",
+							State:    "Online",
+							DeviceID: "456",
 						},
 					},
 				},
@@ -3240,8 +3240,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "123",
+							State:    "Online",
+							DeviceID: "123",
 						},
 					},
 					{
@@ -3257,8 +3257,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "456",
+							State:    "Online",
+							DeviceID: "456",
 						},
 					},
 				},
@@ -3360,8 +3360,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "123",
+							State:    "Online",
+							DeviceID: "123",
 						},
 					},
 					{
@@ -3377,8 +3377,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "456",
+							State:    "Online",
+							DeviceID: "456",
 						},
 					},
 				},
@@ -3478,8 +3478,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "123",
+							State:    "Online",
+							DeviceID: "123",
 						},
 					},
 					{
@@ -3495,8 +3495,8 @@ func TestRescheduleNotification(t *testing.T) {
 							TargetNode: "node1",
 						},
 						Status: cdioperator.ComposableResourceStatus{
-							State:       "Online",
-							CDIDeviceID: "456",
+							State:    "Online",
+							DeviceID: "456",
 						},
 					},
 				},
