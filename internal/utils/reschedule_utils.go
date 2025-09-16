@@ -260,7 +260,7 @@ outerLoop:
 			for _, resource := range resourceList.Items {
 				if resource.Spec.Model == model && resource.Spec.TargetNode == rc.NodeName {
 					if !resourceMatched[resource.Name] && resource.Status.State == "Online" && resource.DeletionTimestamp == nil {
-						isRed, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(resource.Status.CDIDeviceID, resourceSliceInfos)
+						isRed, resourceSliceInfo, deviceName := IsDeviceResourceSliceRed(resource.Status.DeviceID, resourceSliceInfos)
 						if isRed {
 							isUsed, err := IsDeviceUsedByPod(ctx, kubeClient, deviceName, *resourceSliceInfo)
 							if err != nil {
