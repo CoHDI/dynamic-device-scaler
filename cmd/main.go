@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
+	cdioperator "github.com/CoHDI/composable-resource-operator/api/v1alpha1"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

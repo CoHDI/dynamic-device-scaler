@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"time"
 
+	cdioperator "github.com/CoHDI/composable-resource-operator/api/v1alpha1"
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
-	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	resourceapi "k8s.io/api/resource/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

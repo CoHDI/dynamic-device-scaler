@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
+	cdioperator "github.com/CoHDI/composable-resource-operator/api/v1alpha1"
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
-	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	resourceapi "k8s.io/api/resource/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
