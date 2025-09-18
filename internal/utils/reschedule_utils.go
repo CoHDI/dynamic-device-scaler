@@ -24,8 +24,8 @@ import (
 
 	"slices"
 
+	cdioperator "github.com/CoHDI/composable-resource-operator/api/v1alpha1"
 	"github.com/CoHDI/dynamic-device-scaler/internal/types"
-	cdioperator "github.com/IBM/composable-resource-operator/api/v1alpha1"
 	resourceapi "k8s.io/api/resource/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
