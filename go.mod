@@ -8,9 +8,9 @@ require (
 	github.com/CoHDI/composable-resource-operator v0.0.0-20250918052403-b7f30b944ccc
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
-	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.34.0-beta.0.0.20250725024258-04507a37f6a4
-	k8s.io/client-go v0.33.0
+	k8s.io/api v0.34.1
+	k8s.io/apimachinery v0.34.1
+	k8s.io/client-go v0.34.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/controller-runtime v0.21.0
 )
@@ -71,9 +71,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace (
-	github.com/CoHDI/composable-resource-operator => ../../CoHDI/composable-resource-operator
-	k8s.io/api => ../../kubernetes/kubernetes/staging/src/k8s.io/api
-	k8s.io/apimachinery => ../../kubernetes/kubernetes/staging/src/k8s.io/apimachinery
-	k8s.io/client-go => ../../kubernetes/kubernetes/staging/src/k8s.io/client-go
-)
+replace github.com/CoHDI/composable-resource-operator => ../../CoHDI/composable-resource-operator
