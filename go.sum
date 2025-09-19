@@ -1,3 +1,5 @@
+github.com/CoHDI/composable-resource-operator v0.0.0-20250918052403-b7f30b944ccc h1:IL3JX+tL5obgZtqS+tG4Wl/JKAIHxx1e2kD8y9Rz7Yk=
+github.com/CoHDI/composable-resource-operator v0.0.0-20250918052403-b7f30b944ccc/go.mod h1:efOQOm1WjNSTu/f6O9BWmw69isFL4mDAcQLq/HCDMEw=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
