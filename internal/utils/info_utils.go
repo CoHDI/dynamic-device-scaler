@@ -145,7 +145,13 @@ func GetResourceSliceInfo(ctx context.Context, kubeClient client.Client) ([]type
 	}
 
 	for _, rs := range resourceSliceList.Items {
+		if len(rs.Spec.Devices) == 0 {
+			continue
+		}
 		if hasBindingConditions(rs) {
+			continue
+		}
+		if rs.Spec.NodeName == nil {
 			continue
 		}
 
