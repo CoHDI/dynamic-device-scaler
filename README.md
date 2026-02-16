@@ -8,6 +8,7 @@ Composable Hardware Disaggregated Infrastructure is a new architecture that cent
 This technology enables efficient device utilization by sharing expensive devices across multiple nodes, providing only the necessary resources when needed.
 
 ![Composable Hardware Disaggregated Infrastructure](doc/cohdi.png)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_shield)
 
 In k8s, to leverage Composable Hardware Disaggregated Infrastructure and achieve efficient device utilization, an intelligent component is required to scale devices up as needed based on workload demands, and scale them down when they are no longer required.
 Dynamic Device Scaler is the solution. It works in conjunction with k8s' DRA feature and the scheduler to issue instructions for device scaling in response to device requests from Pods.
@@ -42,3 +43,7 @@ For devices attached to the node, the device vendor's DRA driver outputs the Res
 7. The Dynamic Device Scaler checks the device attachment status, and if it recognizes that the device is attached, it informs the scheduler (reschedule instruction).
 
 After this point, the Pod is scheduled in the same way as traditional DRA with devices attached to the node.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_large)
