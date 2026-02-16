@@ -1,4 +1,5 @@
 # dynamic-device-scaler
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_shield)
 
 Dynamic Device Scaler and Composable DRA Driver are components that enable dynamic device scaling (adding and removing) without OS reboots, based on requests from Pods. They bridge the gap between:
 - k8s' [Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) feature
@@ -8,7 +9,6 @@ Composable Hardware Disaggregated Infrastructure is a new architecture that cent
 This technology enables efficient device utilization by sharing expensive devices across multiple nodes, providing only the necessary resources when needed.
 
 ![Composable Hardware Disaggregated Infrastructure](doc/cohdi.png)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_shield)
 
 In k8s, to leverage Composable Hardware Disaggregated Infrastructure and achieve efficient device utilization, an intelligent component is required to scale devices up as needed based on workload demands, and scale them down when they are no longer required.
 Dynamic Device Scaler is the solution. It works in conjunction with k8s' DRA feature and the scheduler to issue instructions for device scaling in response to device requests from Pods.
@@ -18,7 +18,7 @@ Dynamic Device Scaler is the solution. It works in conjunction with k8s' DRA fea
 The following components work together to achieve dynamic scaling:
 
 
-- **k8s Dynamic Resource Allocation**: Provides a mechanism for allocating hardware devices (e.g., GPUs) to Pods based on their requirements. 
+- **k8s Dynamic Resource Allocation**: Provides a mechanism for allocating hardware devices (e.g., GPUs) to Pods based on their requirements.
  It defines available device listings (ResourceSlice), representing a pool of allocatable hardware resources with specific characteristics.
  Pods request resources through Device requests (ResourceClaim), specifying the desired type and quantity of hardware devices.
 - **k8s Scheduler**: Schedules Pods. Considers DRA device requests and determines Pod placement. Implements the DRA feature and [KEP-5007](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/5007-device-attach-before-pod-scheduled) to operate with composable devices.
