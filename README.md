@@ -1,4 +1,5 @@
 # dynamic-device-scaler
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/CoHDI/dynamic-device-scaler/badge)](https://scorecard.dev/viewer/?uri=github.com/CoHDI/dynamic-device-scaler)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_shield)
 
 Dynamic Device Scaler and Composable DRA Driver are components that enable dynamic device scaling (adding and removing) without OS reboots, based on requests from Pods. They bridge the gap between:
