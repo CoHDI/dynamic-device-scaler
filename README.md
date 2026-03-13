@@ -48,5 +48,9 @@ For devices attached to the node, the device vendor's DRA driver outputs the Res
 After this point, the Pod is scheduled in the same way as traditional DRA with devices attached to the node.
 
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes for each release.
+
 ## License
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FCoHDI%2Fdynamic-device-scaler?ref=badge_large)
