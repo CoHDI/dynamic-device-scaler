@@ -1,0 +1,7 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+approvers:
+  - shogom2
+
+reviewers:
+  - shogom2
