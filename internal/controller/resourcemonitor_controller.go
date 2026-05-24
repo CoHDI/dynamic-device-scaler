@@ -46,6 +46,7 @@ type ResourceMonitorReconciler struct {
 
 //+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims/driver,verbs=arbitrary-node:update;arbitrary-node:patch
 
 //+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceslices,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceslices/status,verbs=get;update;patch
