@@ -1,4 +1,4 @@
-ARG BUILD_IMAGE=docker.io/golang:1.24
+ARG BUILD_IMAGE=docker.io/golang:1.26.4
 ARG BASE_IMAGE=gcr.io/distroless/static:nonroot
 
 # Build the manager binary

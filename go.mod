@@ -2,7 +2,7 @@ module github.com/CoHDI/dynamic-device-scaler
 
 go 1.26.0
 
-godebug default=go1.24
+godebug default=go1.26
 
 require (
 	github.com/CoHDI/composable-resource-operator v0.2.0
