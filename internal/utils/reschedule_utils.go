@@ -103,14 +103,15 @@ outerLoop:
 					}
 				}
 			}
-			if !exit {
-				logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device was not found in resourceSlice", "device", rcDevice.Name)
-				resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
-				if err != nil {
-					return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
-				}
-				continue outerLoop
-			}
+			_ = exit
+			// if !exit {
+			// 	logger.V(1).Info("Setting FabricDeviceFailed to Failed due to device was not found in resourceSlice", "device", rcDevice.Name)
+			// 	resourceClaimInfos[k], err = setDevicesState(ctx, kubeClient, rc, "Failed", "FabricDeviceFailed")
+			// 	if err != nil {
+			// 		return resourceClaimInfos, fmt.Errorf("failed to set devices state: %w", err)
+			// 	}
+			// 	continue outerLoop
+			// }
 
 			for _, composabilityRequest := range composabilityRequestList.Items {
 				if composabilityRequest.Spec.Resource.Size > 0 &&

@@ -2360,7 +2360,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			},
 		},
 		{
-			name: "ResourceClaim not exit in resourceSlice",
+			name: "Missing pool devices remain Preparing",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
@@ -2489,14 +2489,14 @@ func TestRescheduleFailedNotification(t *testing.T) {
 						{
 							Name:   "device-1",
 							Model:  "A100 40G",
-							State:  "Failed",
+							State:  "Preparing",
 							Driver: "gpu.nvidia.com",
 							Pool:   "test-pool",
 						},
 						{
 							Name:   "device-2",
 							Model:  "A100 40G",
-							State:  "Failed",
+							State:  "Preparing",
 							Driver: "gpu.nvidia.com",
 							Pool:   "test-pool",
 						},
@@ -2505,7 +2505,7 @@ func TestRescheduleFailedNotification(t *testing.T) {
 			},
 		},
 		{
-			name: "ResourceClaim not exit in resourceSlice and set device state failed",
+			name: "Missing pool devices do not attempt a ResourceClaim status update",
 			existingComposableResource: &cdioperator.ComposableResourceList{
 				Items: []cdioperator.ComposableResource{
 					{
@@ -2623,8 +2623,31 @@ func TestRescheduleFailedNotification(t *testing.T) {
 					},
 				},
 			},
-			wantErr:        true,
-			expectedErrMsg: "failed to set devices state:",
+			wantErr: false,
+			expectedResourceClaims: []types.ResourceClaimInfo{
+				{
+					Name:              "claim1",
+					Namespace:         "test-ns",
+					NodeName:          "node1",
+					CreationTimestamp: metav1.Time{Time: now},
+					Devices: []types.ResourceClaimDevice{
+						{
+							Name:   "device-1",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
+						},
+						{
+							Name:   "device-2",
+							Model:  "A100 40G",
+							State:  "Preparing",
+							Driver: "gpu.nvidia.com",
+							Pool:   "test-pool",
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "failed to list composableResource",

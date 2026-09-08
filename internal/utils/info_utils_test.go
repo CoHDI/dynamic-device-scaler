@@ -202,6 +202,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						{
 							Name:   "nvidia-a100-80-gpu2",
 							State:  "Preparing",
+							Model:  "A100 80G",
 							Driver: "gpu.nvidia.com",
 							Pool:   "nvidia-a100-80-fabric1",
 						},
@@ -589,6 +590,7 @@ func TestGetResourceClaimInfo(t *testing.T) {
 						{
 							Name:   "nvidia-a100-80-gpu2",
 							State:  "Preparing",
+							Model:  "A100 80G",
 							Driver: "gpu.nvidia.com",
 							Pool:   "nvidia-a100-80-fabric1",
 						},
