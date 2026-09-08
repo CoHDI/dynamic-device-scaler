@@ -230,6 +230,7 @@ func TestCollectInfo(t *testing.T) {
 						{
 							Name:   "gpu-3",
 							State:  "Preparing",
+							Model:  "A100 80G",
 							Driver: "gpu.nvidia.com",
 							Pool:   "nvidia-a100-80-fabric1",
 						},
@@ -695,6 +696,7 @@ func TestCollectInfo(t *testing.T) {
 						{
 							Name:   "gpu-3",
 							State:  "Preparing",
+							Model:  "A100 80G",
 							Driver: "gpu.nvidia.com",
 							Pool:   "nvidia-a100-80-fabric1",
 						},

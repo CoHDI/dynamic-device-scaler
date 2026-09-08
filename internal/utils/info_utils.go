@@ -92,6 +92,15 @@ func GetResourceClaimInfo(ctx context.Context, kubeClient client.Client, composa
 				}
 			}
 
+			if deviceInfo.Model == "" {
+				re := regexp.MustCompile(`-fabric\d+$`)
+				deviceName := re.ReplaceAllString(device.Pool, "")
+				if model, err := getModelName(composableDRASpec, deviceName); err == nil {
+					logger.Info("Found model name from allocation pool", "device", device.Device, "pool", device.Pool, "model", model)
+					deviceInfo.Model = model
+				}
+			}
+
 			if len(rc.Status.Devices) == 0 {
 				deviceInfo.State = "Preparing"
 			} else {
