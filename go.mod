@@ -5,7 +5,7 @@ go 1.26.0
 godebug default=go1.26
 
 require (
-	github.com/CoHDI/composable-resource-operator v0.2.0
+	github.com/CoHDI/composable-resource-operator v0.2.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
 	k8s.io/api v0.37.1
