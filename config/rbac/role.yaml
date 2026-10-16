@@ -61,3 +61,10 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - resource.k8s.io
+  resources:
+  - resourceclaims/driver
+  verbs:
+  - arbitrary-node:patch
+  - arbitrary-node:update
