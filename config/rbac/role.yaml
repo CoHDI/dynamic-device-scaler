@@ -63,6 +63,8 @@ rules:
   - update
 - apiGroups:
   - resource.k8s.io
+  resourceNames:
+  - gpu.nvidia.com
   resources:
   - resourceclaims/driver
   verbs:
